@@ -19,7 +19,7 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {subjects.map((subject) => (
-          <Link href={`/attendance/${subject.id}`} key={subject.id} className="group h-full">
+          <Link href={`/attendance/${subject.id}`} key={subject.id} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
             <Card className="hover:border-primary/80 transition-colors h-full flex flex-col hover:shadow-lg">
               <CardHeader className="flex-grow">
                 <div className="flex items-start gap-4">
