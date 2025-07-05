@@ -1,4 +1,11 @@
-import type { Subject, SubjectWithAttendance } from '@/types';
+import type { Staff, StaffSubjectAssignment, Subject, SubjectWithAttendance } from '@/types';
+
+export const staff: Staff[] = [
+  { id: 'staff-1', name: 'Albus Dumbledore', email: 'dumbledore@bvp.edu' },
+  { id: 'staff-2', name: 'Minerva McGonagall', email: 'mcgonagall@bvp.edu' },
+  { id: 'staff-3', name: 'Severus Snape', email: 'snape@bvp.edu' },
+  { id: 'staff-4', name: 'Filius Flitwick', email: 'flitwick@bvp.edu' },
+];
 
 export const subjects: Subject[] = [
   {
@@ -42,6 +49,13 @@ export const subjects: Subject[] = [
     totalLectures: 25
   },
 ];
+
+export const assignments: StaffSubjectAssignment[] = [
+    { staffId: 'staff-3', subjectId: 'cs-301' },
+    { staffId: 'staff-2', subjectId: 'cs-302' },
+    { staffId: 'staff-1', subjectId: 'cs-303' },
+];
+
 
 export const subjectsWithAttendance: SubjectWithAttendance[] = subjects.map(subject => ({
   ...subject,

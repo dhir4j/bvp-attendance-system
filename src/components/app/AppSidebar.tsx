@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookCopy, Home, LogOut, UserX } from "lucide-react"
+import { BookCopy, Home, LogOut, Shield, UserX } from "lucide-react"
 
 import {
   Sidebar,
@@ -20,6 +20,7 @@ export function AppSidebar() {
   const menuItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/dashboard/defaulters", label: "Defaulters", icon: UserX },
+    { href: "/dashboard/admin", label: "Admin Panel", icon: Shield },
   ]
 
   return (
@@ -36,7 +37,7 @@ export function AppSidebar() {
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
                 asChild
-                isActive={pathname === item.href}
+                isActive={pathname.startsWith(item.href) && (item.href !== '/dashboard' || pathname === '/dashboard')}
                 className="bg-transparent data-[active=true]:bg-primary/20 data-[active=true]:text-primary-foreground"
               >
                 <Link href={item.href}>

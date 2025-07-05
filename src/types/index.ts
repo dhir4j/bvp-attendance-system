@@ -11,6 +11,17 @@ export interface Subject {
   totalLectures: number;
 }
 
+export interface Staff {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface StaffSubjectAssignment {
+  staffId: string;
+  subjectId: string;
+}
+
 export interface StudentAttendance extends Student {
   attended: number;
 }
