@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { PlusCircle, Trash2 } from "lucide-react"
 import {
   Table,
@@ -35,54 +35,100 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { 
-    staff as allStaff,
-    subjects as allSubjects,
-    assignments as initialAssignments
-} from "@/lib/data"
-import type { StaffSubjectAssignment } from "@/types"
+import { Input } from "@/components/ui/input"
+import type { Staff, Subject, Assignment } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 
 export default function AssignmentsPage() {
   const { toast } = useToast()
-  const [assignments, setAssignments] = useState<StaffSubjectAssignment[]>(initialAssignments)
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [staff, setStaff] = useState<Staff[]>([])
+  const [subjects, setSubjects] = useState<Subject[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [newAssignment, setNewAssignment] = useState<{ staffId: string; subjectId: string }>({ staffId: "", subjectId: "" })
+  const [newAssignment, setNewAssignment] = useState({ staff_id: "", subject_id: "", lecture_type: "", batch_number: null as number | null, classroom_name: "" })
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+        const [assignmentsRes, staffRes, subjectsRes] = await Promise.all([
+            fetch('/api/admin/assignments'),
+            fetch('/api/admin/staff'),
+            fetch('/api/admin/subjects')
+        ]);
+        if(!assignmentsRes.ok || !staffRes.ok || !subjectsRes.ok) {
+            throw new Error("Failed to fetch initial data");
+        }
+        setAssignments(await assignmentsRes.json());
+        setStaff(await staffRes.json());
+        setSubjects(await subjectsRes.json());
+    } catch(error: any) {
+        toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+        setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const assignedData = useMemo(() => {
     return assignments.map(a => {
-        const staff = allStaff.find(s => s.id === a.staffId)
-        const subject = allSubjects.find(s => s.id === a.subjectId)
-        return { ...a, staffName: staff?.name, subjectName: subject?.name ? `${subject.name} - ${subject.section}`: 'Unknown' }
-    }).filter(a => a.staffName && a.subjectName);
-  }, [assignments]);
-
-  const handleSave = () => {
-    if(newAssignment.staffId && newAssignment.subjectId) {
-        const exists = assignments.some(a => a.staffId === newAssignment.staffId && a.subjectId === newAssignment.subjectId);
-        if (!exists) {
-            setAssignments([...assignments, newAssignment]);
-            toast({ title: "Success", description: "Assignment created." })
-        } else {
-            toast({ variant: "destructive", title: "Error", description: "This assignment already exists." })
+        const staffMember = staff.find(s => s.id === a.staff_id)
+        const subject = subjects.find(s => s.id === a.subject_id)
+        return { 
+            ...a, 
+            staffName: staffMember?.full_name || 'Unknown Staff', 
+            subjectName: subject ? `${subject.name} (${subject.code})` : 'Unknown Subject'
         }
-        setNewAssignment({ staffId: "", subjectId: "" });
-        setIsModalOpen(false);
+    });
+  }, [assignments, staff, subjects]);
+
+  const handleSave = async () => {
+    if(newAssignment.staff_id && newAssignment.subject_id && newAssignment.lecture_type && newAssignment.classroom_name) {
+        try {
+            const res = await fetch("/api/admin/assignments", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  ...newAssignment,
+                  staff_id: parseInt(newAssignment.staff_id),
+                  subject_id: parseInt(newAssignment.subject_id)
+                })
+            });
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || "Failed to create assignment");
+            }
+            toast({ title: "Success", description: "Assignment created." });
+            fetchData();
+            setIsModalOpen(false);
+            setNewAssignment({ staff_id: "", subject_id: "", lecture_type: "", batch_number: null, classroom_name: "" });
+        } catch (error: any) {
+            toast({ variant: "destructive", title: "Error", description: error.message });
+        }
     } else {
-        toast({ variant: "destructive", title: "Error", description: "Please select both a staff and a subject." })
+        toast({ variant: "destructive", title: "Error", description: "Please fill all required fields." })
     }
   }
   
-  const handleDelete = (staffId: string, subjectId: string) => {
-    setAssignments(assignments.filter(a => !(a.staffId === staffId && a.subjectId === subjectId)))
-    toast({ title: "Success", description: "Assignment deleted." })
+  const handleDelete = async (assignmentId: number) => {
+    if(!confirm("Are you sure?")) return;
+    try {
+        const res = await fetch(`/api/admin/assignments/${assignmentId}`, { method: "DELETE" });
+        if(!res.ok) {
+             const errorData = await res.json();
+            throw new Error(errorData.error || "Failed to delete assignment");
+        }
+        toast({ title: "Success", description: "Assignment deleted." });
+        fetchData();
+    } catch (error: any) {
+         toast({ variant: "destructive", title: "Error", description: error.message });
+    }
   }
   
-  const unassignedSubjects = useMemo(() => {
-    const assignedSubjectIds = new Set(assignments.map(a => a.subjectId));
-    return allSubjects.filter(s => !assignedSubjectIds.has(s.id));
-  }, [assignments]);
-
   return (
     <>
       <Card>
@@ -107,29 +153,48 @@ export default function AssignmentsPage() {
                     <div className="grid gap-4 py-4">
                         <div className="space-y-2">
                             <Label htmlFor="staff">Staff</Label>
-                            <Select onValueChange={(value) => setNewAssignment({...newAssignment, staffId: value})}>
+                            <Select onValueChange={(value) => setNewAssignment({...newAssignment, staff_id: value})}>
                                 <SelectTrigger id="staff">
                                     <SelectValue placeholder="Select Staff" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {allStaff.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                    {staff.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.full_name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="subject">Subject</Label>
-                            <Select onValueChange={(value) => setNewAssignment({...newAssignment, subjectId: value})}>
+                            <Select onValueChange={(value) => setNewAssignment({...newAssignment, subject_id: value})}>
                                 <SelectTrigger id="subject">
                                     <SelectValue placeholder="Select Subject" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {unassignedSubjects.length > 0 ? (
-                                        unassignedSubjects.map(s => <SelectItem key={s.id} value={s.id}>{s.name} - {s.section}</SelectItem>)
-                                    ) : (
-                                        <div className="p-4 text-center text-sm text-muted-foreground">All subjects assigned.</div>
-                                    )}
+                                    {subjects.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name} - {s.code}</SelectItem>)}
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="lecture_type">Lecture Type</Label>
+                            <Select onValueChange={(value) => setNewAssignment({...newAssignment, lecture_type: value})}>
+                                <SelectTrigger id="lecture_type">
+                                    <SelectValue placeholder="Select Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="TH">Theory (TH)</SelectItem>
+                                    <SelectItem value="PR">Practical (PR)</SelectItem>
+                                    <SelectItem value="TU">Tutorial (TU)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                         {newAssignment.lecture_type !== 'TH' && (
+                            <div className="space-y-2">
+                                <Label htmlFor="batch_number">Batch Number</Label>
+                                <Input id="batch_number" type="number" placeholder="Enter batch number (e.g. 1, 2, 3)" onChange={(e) => setNewAssignment({...newAssignment, batch_number: e.target.value ? parseInt(e.target.value) : null})} />
+                            </div>
+                        )}
+                        <div className="space-y-2">
+                            <Label htmlFor="classroom_name">Classroom Name</Label>
+                            <Input id="classroom_name" placeholder="e.g. C-101" value={newAssignment.classroom_name} onChange={(e) => setNewAssignment({...newAssignment, classroom_name: e.target.value})} />
                         </div>
                     </div>
                     <DialogFooter>
@@ -147,16 +212,26 @@ export default function AssignmentsPage() {
                 <TableRow>
                     <TableHead>Staff Member</TableHead>
                     <TableHead>Assigned Subject</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Batch</TableHead>
+                    <TableHead>Classroom</TableHead>
                     <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
                 </TableHeader>
                 <TableBody>
-                {assignedData.map((a) => (
-                    <TableRow key={`${a.staffId}-${a.subjectId}`}>
+                {isLoading ? (
+                    <TableRow>
+                        <TableCell colSpan={6} className="text-center">Loading...</TableCell>
+                    </TableRow>
+                ) : assignedData.map((a) => (
+                    <TableRow key={a.id}>
                     <TableCell className="font-medium">{a.staffName}</TableCell>
                     <TableCell>{a.subjectName}</TableCell>
+                    <TableCell>{a.lecture_type}</TableCell>
+                    <TableCell>{a.batch_number ?? 'N/A'}</TableCell>
+                    <TableCell>{a.classroom_name}</TableCell>
                     <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(a.staffId, a.subjectId)} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(a.id)} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
                         <Trash2 className="h-4 w-4" />
                         <span className="sr-only">Delete</span>
                         </Button>

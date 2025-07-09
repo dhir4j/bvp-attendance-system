@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { PlusCircle, MoreHorizontal, Edit, Trash2 } from "lucide-react"
 import {
   Table,
@@ -34,21 +34,57 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { subjects as initialSubjects } from "@/lib/data"
+import { useToast } from "@/hooks/use-toast"
 import type { Subject } from "@/types"
 
+const initialFormData = {
+    id: 0,
+    course_code: "",
+    dept_code: "",
+    semester: 0,
+    code: "",
+    name: ""
+};
+
 export default function SubjectsPage() {
-  const [subjects, setSubjects] = useState<Subject[]>(initialSubjects)
+  const { toast } = useToast()
+  const [subjects, setSubjects] = useState<Subject[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null)
-  const [formData, setFormData] = useState({ id: "", name: "", section: "", totalLectures: 0 })
+  const [formData, setFormData] = useState<Omit<Subject, 'totalLectures'>>(initialFormData)
   
+  const fetchSubjects = useCallback(async () => {
+    setIsLoading(true);
+    try {
+        const res = await fetch("/api/admin/subjects");
+        if (!res.ok) throw new Error("Failed to fetch subjects");
+        const data = await res.json();
+        setSubjects(data);
+    } catch(error: any) {
+        toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+        setIsLoading(false);
+    }
+  }, [toast])
+
+  useEffect(() => {
+    fetchSubjects()
+  }, [fetchSubjects])
+
   const handleOpenModal = (subject: Subject | null = null) => {
     setSelectedSubject(subject)
     if (subject) {
-      setFormData({ id: subject.id, name: subject.name, section: subject.section, totalLectures: subject.totalLectures })
+      setFormData({
+        id: subject.id,
+        name: subject.name,
+        code: subject.code,
+        course_code: subject.course_code,
+        dept_code: subject.dept_code,
+        semester: subject.semester
+      })
     } else {
-      setFormData({ id: "", name: "", section: "", totalLectures: 20 })
+      setFormData(initialFormData)
     }
     setIsModalOpen(true)
   }
@@ -56,21 +92,51 @@ export default function SubjectsPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false)
     setSelectedSubject(null)
-    setFormData({ id: "", name: "", section: "", totalLectures: 0 })
   }
 
-  const handleSave = () => {
-    if (selectedSubject) {
-      setSubjects(subjects.map(s => s.id === selectedSubject.id ? { ...s, ...formData } : s))
-    } else {
-      const newSubject = { ...formData, id: `sub-${Date.now()}`, students: [] }
-      setSubjects([...subjects, newSubject])
+  const handleSave = async () => {
+    const url = selectedSubject ? `/api/admin/subjects/${selectedSubject.id}` : "/api/admin/subjects";
+    const method = selectedSubject ? "PUT" : "POST";
+
+    const body = {
+      subject_name: formData.name,
+      subject_code: formData.code,
+      course_code: formData.course_code,
+      dept_code: formData.dept_code,
+      semester_number: formData.semester
     }
-    handleCloseModal()
+    
+    try {
+        const res = await fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        if(!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || `Failed to ${selectedSubject ? 'update' : 'add'} subject`);
+        }
+        toast({ title: "Success", description: `Subject ${selectedSubject ? 'updated' : 'added'}.` });
+        fetchSubjects();
+        handleCloseModal();
+    } catch (error: any) {
+        toast({ variant: "destructive", title: "Error", description: error.message });
+    }
   }
   
-  const handleDelete = (subjectId: string) => {
-    setSubjects(subjects.filter(s => s.id !== subjectId))
+  const handleDelete = async (subjectId: number) => {
+    if(!confirm("Are you sure? This will also delete related assignments.")) return;
+    try {
+        const res = await fetch(`/api/admin/subjects/${subjectId}`, { method: "DELETE" });
+        if(!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || "Failed to delete subject");
+        }
+        toast({ title: "Success", description: "Subject deleted." });
+        fetchSubjects();
+    } catch (error: any) {
+        toast({ variant: "destructive", title: "Error", description: error.message });
+    }
   }
 
   return (
@@ -93,17 +159,25 @@ export default function SubjectsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Section</TableHead>
-                <TableHead className="hidden sm:table-cell">Total Lectures</TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Course Code</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Semester</TableHead>
                 <TableHead className="w-[50px] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {subjects.map((s) => (
+              {isLoading ? (
+                 <TableRow>
+                    <TableCell colSpan={6} className="text-center">Loading...</TableCell>
+                </TableRow>
+              ) : subjects.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>{s.section}</TableCell>
-                  <TableCell className="hidden sm:table-cell">{s.totalLectures}</TableCell>
+                  <TableCell>{s.code}</TableCell>
+                  <TableCell>{s.course_code}</TableCell>
+                  <TableCell>{s.dept_code}</TableCell>
+                  <TableCell>{s.semester}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -139,16 +213,24 @@ export default function SubjectsPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">Subject Name</Label>
               <Input id="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="section">Section</Label>
-              <Input id="section" value={formData.section} onChange={(e) => setFormData({...formData, section: e.target.value})} />
+              <Label htmlFor="code">Subject Code</Label>
+              <Input id="code" value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} />
             </div>
              <div className="space-y-2">
-              <Label htmlFor="lectures">Total Lectures</Label>
-              <Input id="lectures" type="number" value={formData.totalLectures} onChange={(e) => setFormData({...formData, totalLectures: parseInt(e.target.value) || 0})} />
+              <Label htmlFor="course_code">Course Code</Label>
+              <Input id="course_code" value={formData.course_code} onChange={(e) => setFormData({...formData, course_code: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dept_code">Department Code</Label>
+              <Input id="dept_code" value={formData.dept_code} onChange={(e) => setFormData({...formData, dept_code: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="semester">Semester</Label>
+              <Input id="semester" type="number" value={formData.semester} onChange={(e) => setFormData({...formData, semester: parseInt(e.target.value) || 0})} />
             </div>
           </div>
           <DialogFooter>

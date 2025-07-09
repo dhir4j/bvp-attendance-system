@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { PlusCircle, MoreHorizontal, Edit, Trash2 } from "lucide-react"
 import {
   Table,
@@ -34,21 +34,41 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { staff as initialStaff } from "@/lib/data"
+import { useToast } from "@/hooks/use-toast"
 import type { Staff } from "@/types"
 
 export default function StaffPage() {
-  const [staff, setStaff] = useState<Staff[]>(initialStaff)
+  const { toast } = useToast()
+  const [staff, setStaff] = useState<Staff[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
-  const [formData, setFormData] = useState({ id: "", name: "", email: "" })
-  
+  const [formData, setFormData] = useState({ id: 0, username: "", full_name: "", password: "" })
+
+  const fetchStaff = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/admin/staff")
+      if (!res.ok) throw new Error("Failed to fetch staff")
+      const data = await res.json()
+      setStaff(data)
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message })
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast])
+
+  useEffect(() => {
+    fetchStaff()
+  }, [fetchStaff])
+
   const handleOpenModal = (staffMember: Staff | null = null) => {
     setSelectedStaff(staffMember)
     if (staffMember) {
-      setFormData({ id: staffMember.id, name: staffMember.name, email: staffMember.email })
+      setFormData({ id: staffMember.id, username: staffMember.username, full_name: staffMember.full_name, password: "" })
     } else {
-      setFormData({ id: "", name: "", email: "" })
+      setFormData({ id: 0, username: "", full_name: "", password: "" })
     }
     setIsModalOpen(true)
   }
@@ -56,21 +76,54 @@ export default function StaffPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false)
     setSelectedStaff(null)
-    setFormData({ id: "", name: "", email: "" })
   }
 
-  const handleSave = () => {
-    if (selectedStaff) {
-      setStaff(staff.map(s => s.id === selectedStaff.id ? { ...s, ...formData } : s))
-    } else {
-      const newStaff = { ...formData, id: `staff-${Date.now()}` }
-      setStaff([...staff, newStaff])
+  const handleSave = async () => {
+    const url = selectedStaff ? `/api/admin/staff/${selectedStaff.id}` : "/api/admin/staff";
+    const method = selectedStaff ? "PUT" : "POST";
+
+    const body: any = {
+      username: formData.username,
+      full_name: formData.full_name,
     }
-    handleCloseModal()
+    if (formData.password) {
+      body.password = formData.password
+    }
+     if (!selectedStaff) {
+      body.password = formData.password || "defaultpassword"; // Ensure password is set for new staff
+    }
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || `Failed to ${selectedStaff ? 'update' : 'add'} staff`)
+      }
+      toast({ title: "Success", description: `Staff ${selectedStaff ? 'updated' : 'added'}.` })
+      fetchStaff()
+      handleCloseModal()
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message })
+    }
   }
-  
-  const handleDelete = (staffId: string) => {
-    setStaff(staff.filter(s => s.id !== staffId))
+
+  const handleDelete = async (staffId: number) => {
+    if (!confirm("Are you sure you want to delete this staff member?")) return;
+    try {
+        const res = await fetch(`/api/admin/staff/${staffId}`, { method: "DELETE" });
+        if(!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || "Failed to delete staff");
+        }
+        toast({ title: "Success", description: "Staff member deleted." });
+        fetchStaff();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    }
   }
 
   return (
@@ -92,16 +145,20 @@ export default function StaffPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead className="hidden md:table-cell">Email</TableHead>
+                <TableHead>Full Name</TableHead>
+                <TableHead>Username</TableHead>
                 <TableHead className="w-[50px] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {staff.map((s) => (
+              {isLoading ? (
+                <TableRow>
+                    <TableCell colSpan={3} className="text-center">Loading...</TableCell>
+                </TableRow>
+              ) : staff.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell className="hidden md:table-cell">{s.email}</TableCell>
+                  <TableCell className="font-medium">{s.full_name}</TableCell>
+                  <TableCell>{s.username}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -137,12 +194,16 @@ export default function StaffPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input id="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+              <Label htmlFor="full_name">Full Name</Label>
+              <Input id="full_name" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+              <Label htmlFor="username">Username</Label>
+              <Input id="username" value={formData.username} onChange={(e) => setFormData({...formData, username: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" placeholder={selectedStaff ? "Leave blank to keep unchanged" : "Required"} onChange={(e) => setFormData({...formData, password: e.target.value})} />
             </div>
           </div>
           <DialogFooter>

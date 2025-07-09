@@ -2,34 +2,34 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AtSign, KeyRound, LogIn } from 'lucide-react';
+import { AtSign, KeyRound, LogIn, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/hooks/use-toast";
 import Link from 'next/link';
 
-export default function LoginPage() {
+export default function AdminLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('bvp@admin');
+  const [password, setPassword] = useState('bvp@pass');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const res = await fetch('/api/staff/login', {
+      const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
 
       if (res.ok) {
-        toast({ title: "Success", description: "Logged in successfully." });
-        router.push('/dashboard');
+        toast({ title: "Success", description: "Admin logged in successfully." });
+        router.push('/dashboard/admin');
       } else {
         const errorData = await res.json();
         throw new Error(errorData.error || "Login failed");
@@ -45,19 +45,19 @@ export default function LoginPage() {
     <main className="flex min-h-screen w-full items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-headline">BVP Staff Login</CardTitle>
-          <CardDescription>Please log in to manage attendance</CardDescription>
+          <UserCog className="mx-auto h-12 w-12 text-primary mb-2" />
+          <CardTitle className="text-3xl font-headline">Admin Login</CardTitle>
+          <CardDescription>Enter admin credentials to access the panel</CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">Admin Username</Label>
               <div className="relative">
                 <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input 
                   id="username" 
                   type="text" 
-                  placeholder="your.username" 
                   required 
                   className="pl-10" 
                   value={username}
@@ -66,7 +66,7 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Admin Password</Label>
               <div className="relative">
                 <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input 
@@ -86,7 +86,7 @@ export default function LoginPage() {
               {isLoading ? "Logging in..." : "Login"}
             </Button>
             <Button variant="link" size="sm" asChild>
-                <Link href="/login/admin">Admin Login</Link>
+                <Link href="/">Staff Login</Link>
             </Button>
           </CardFooter>
         </form>
