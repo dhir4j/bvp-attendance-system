@@ -98,20 +98,23 @@ export default function SubjectsPage() {
   }
 
   const handleSave = async () => {
-    if (!formData.semester || formData.semester < 1 || formData.semester > 6) {
-      toast({ variant: "destructive", title: "Invalid Semester", description: "Semester must be a number between 1 and 6." });
+    if (!formData.semester || formData.semester < 1 || formData.semester > 8) {
+      toast({ variant: "destructive", title: "Invalid Semester", description: "Semester must be a number between 1 and 8." });
       return;
     }
 
     const url = selectedSubject ? `/api/admin/subjects/${selectedSubject.id}` : "/api/admin/subjects";
     const method = selectedSubject ? "PUT" : "POST";
 
-    const body = {
+    const body:any = {
       subject_name: formData.name,
       subject_code: formData.code,
-      course_code: formData.course_code,
-      dept_code: formData.dept_code,
-      semester_number: formData.semester
+    }
+
+    if (!selectedSubject) {
+        body.course_code = formData.course_code;
+        body.dept_code = formData.dept_code;
+        body.semester_number = formData.semester;
     }
     
     try {
@@ -154,7 +157,7 @@ export default function SubjectsPage() {
         return;
     }
     const numValue = parseInt(value, 10);
-    if (!isNaN(numValue) && numValue >= 1 && numValue <= 6) {
+    if (!isNaN(numValue) && numValue >= 1 && numValue <= 8) {
         setFormData({...formData, semester: numValue});
     } else if (value.length > 1) {
       // do nothing to prevent invalid input
@@ -239,23 +242,23 @@ export default function SubjectsPage() {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="name">Subject Name</Label>
-              <Input id="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+              <Input id="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} disabled={!!selectedSubject} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="code">Subject Abr</Label>
-              <Input id="code" value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} />
+              <Input id="code" value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} disabled={!!selectedSubject} />
             </div>
              <div className="space-y-2">
               <Label htmlFor="course_code">Course Code</Label>
-              <Input id="course_code" value={formData.course_code} onChange={(e) => setFormData({...formData, course_code: e.target.value})} />
+              <Input id="course_code" value={formData.course_code} onChange={(e) => setFormData({...formData, course_code: e.target.value})} disabled={!!selectedSubject} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="dept_code">Department Code</Label>
-              <Input id="dept_code" value={formData.dept_code} onChange={(e) => setFormData({...formData, dept_code: e.target.value})} />
+              <Input id="dept_code" value={formData.dept_code} onChange={(e) => setFormData({...formData, dept_code: e.target.value})} disabled={!!selectedSubject} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
-              <Input id="semester" type="number" value={formData.semester} onChange={handleSemesterChange} placeholder="1-6" />
+              <Input id="semester" type="number" value={formData.semester} onChange={handleSemesterChange} placeholder="1-8" disabled={!!selectedSubject} />
             </div>
           </div>
           <DialogFooter>
@@ -267,3 +270,5 @@ export default function SubjectsPage() {
     </Card>
   )
 }
+
+    
