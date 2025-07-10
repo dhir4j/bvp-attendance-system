@@ -217,7 +217,7 @@ export default function SubjectsPage() {
               <Input id="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="code">Subject Code</Label>
+              <Label htmlFor="code">Subject Abr</Label>
               <Input id="code" value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} />
             </div>
              <div className="space-y-2">
