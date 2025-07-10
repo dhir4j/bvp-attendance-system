@@ -1,4 +1,5 @@
 from . import db
+from sqlalchemy.dialects.postgresql import ARRAY
 
 class Department(db.Model):
     __tablename__ = 'departments'
@@ -45,3 +46,14 @@ class Assignment(db.Model):
     batch_number   = db.Column(db.Integer)
     classroom_name = db.Column(db.String, nullable=False)
     __table_args__ = (db.UniqueConstraint('staff_id','subject_id','lecture_type','batch_number','classroom_name'),)
+
+class AttendanceRecord(db.Model):
+    __tablename__ = 'attendance_records'
+    id           = db.Column(db.Integer, primary_key=True)
+    staff_id     = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=False)
+    subject_id   = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
+    lecture_type = db.Column(db.String, nullable=False)
+    batch_number = db.Column(db.Integer)
+    date         = db.Column(db.Date, nullable=False, default=db.func.current_date())
+    absent_rolls = db.Column(ARRAY(db.String))
+    created_at   = db.Column(db.TIMESTAMP, server_default=db.func.now())
