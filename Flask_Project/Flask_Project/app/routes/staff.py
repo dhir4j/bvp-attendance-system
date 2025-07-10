@@ -28,7 +28,9 @@ def get_assignments():
     for a in assigns:
         subj = Subject.query.get(a.subject_id)
         ent  = out.setdefault(a.subject_id,{
-            'subject_code':subj.subject_code,'lecture_types':{}
+            'subject_code': subj.subject_code,
+            'subject_name': subj.subject_name, # <-- ADD THIS LINE
+            'lecture_types':{}
         })
         ent['lecture_types'].setdefault(a.lecture_type, []).append(a.batch_number)
     return jsonify(out)

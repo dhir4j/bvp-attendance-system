@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { BookCopy, ChevronRight } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
-import type { StaffAssignmentsResponse, Subject, Staff } from '@/types';
+import type { StaffAssignmentsResponse } from '@/types';
 import {
   Card,
   CardDescription,
@@ -29,28 +29,19 @@ export default function DashboardPage() {
   const fetchAssignments = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [assignmentsRes, subjectsRes] = await Promise.all([
-        fetch('/api/staff/assignments'),
-        fetch('/api/admin/subjects') // Use admin route to get all subject details
-      ]);
+      const res = await fetch('/api/staff/assignments');
       
-      if (!assignmentsRes.ok) {
+      if (!res.ok) {
         throw new Error("Failed to fetch your assignments. Please log in again.");
       }
-       if (!subjectsRes.ok) {
-        throw new Error("Failed to fetch subject details.");
-      }
 
-      const assignments: StaffAssignmentsResponse = await assignmentsRes.json();
-      const allSubjects: Subject[] = await subjectsRes.json();
-
-      const subjectsMap = new Map(allSubjects.map(s => [s.id, s.subject_name]));
+      const assignments: StaffAssignmentsResponse = await res.json();
 
       const enriched = Object.entries(assignments).map(([subjectId, assignment]) => ({
         subjectId,
         code: assignment.subject_code,
         lectureTypes: Object.keys(assignment.lecture_types).join(', '),
-        name: subjectsMap.get(parseInt(subjectId)) || 'Unknown Subject',
+        name: assignment.subject_name || 'Unknown Subject',
       }));
 
       setEnrichedAssignments(enriched);
