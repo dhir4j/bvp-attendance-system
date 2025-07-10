@@ -9,7 +9,7 @@ export interface Subject {
   id: number;
   course_code: string;
   dept_code: string;
-  semester_number: number;
+  semester: number;
   subject_code: string;
   subject_name: string;
 }

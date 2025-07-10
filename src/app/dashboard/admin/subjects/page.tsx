@@ -41,12 +41,12 @@ const initialFormData = {
     id: 0,
     course_code: "",
     dept_code: "",
-    semester_number: "" as number | "",
+    semester: "" as number | "",
     subject_code: "",
     subject_name: ""
 };
 
-type FormDataType = Omit<Subject, 'id' | 'semester_number'> & { id: number; semester_number: number | "" };
+type FormDataType = Omit<Subject, 'id' | 'semester'> & { id: number; semester: number | "" };
 
 
 export default function SubjectsPage() {
@@ -84,7 +84,7 @@ export default function SubjectsPage() {
         subject_code: subject.subject_code,
         course_code: subject.course_code,
         dept_code: subject.dept_code,
-        semester_number: subject.semester_number
+        semester: subject.semester
       })
     } else {
       setFormData(initialFormData)
@@ -98,7 +98,7 @@ export default function SubjectsPage() {
   }
 
   const handleSave = async () => {
-    if (!formData.semester_number || formData.semester_number < 1 || formData.semester_number > 8) {
+    if (!formData.semester || formData.semester < 1 || formData.semester > 8) {
       toast({ variant: "destructive", title: "Invalid Semester", description: "Semester must be a number between 1 and 8." });
       return;
     }
@@ -114,7 +114,7 @@ export default function SubjectsPage() {
     if (!selectedSubject) {
         body.course_code = formData.course_code;
         body.dept_code = formData.dept_code;
-        body.semester_number = formData.semester_number;
+        body.semester_number = formData.semester;
     }
     
     try {
@@ -153,16 +153,16 @@ export default function SubjectsPage() {
   const handleSemesterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === "") {
-        setFormData({...formData, semester_number: ""});
+        setFormData({...formData, semester: ""});
         return;
     }
     const numValue = parseInt(value, 10);
-    if (!isNaN(numValue) && numValue >= 1 && numValue <= 8) {
-        setFormData({...formData, semester_number: numValue});
+    if (!isNaN(numValue) && numValue >= 1 && numValue <= 6) {
+        setFormData({...formData, semester: numValue});
     } else if (value.length > 1) {
       // do nothing to prevent invalid input
     } else {
-      setFormData({...formData, semester_number: ""});
+      setFormData({...formData, semester: ""});
     }
   };
 
@@ -205,7 +205,7 @@ export default function SubjectsPage() {
                   <TableCell>{s.subject_code}</TableCell>
                   <TableCell>{s.course_code}</TableCell>
                   <TableCell>{s.dept_code}</TableCell>
-                  <TableCell>{s.semester_number}</TableCell>
+                  <TableCell>{s.semester}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -258,7 +258,7 @@ export default function SubjectsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
-              <Input id="semester" type="number" value={formData.semester_number} onChange={handleSemesterChange} placeholder="1-8" disabled={!!selectedSubject} />
+              <Input id="semester" type="number" value={formData.semester} onChange={handleSemesterChange} placeholder="1-6" disabled={!!selectedSubject} />
             </div>
           </div>
           <DialogFooter>
