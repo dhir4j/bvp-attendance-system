@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { BookCopy, ChevronRight } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
-import { StaffAssignmentsResponse } from '@/types';
+import type { StaffAssignmentsResponse, Subject, Staff } from '@/types';
 import {
   Card,
   CardDescription,
@@ -12,24 +12,52 @@ import {
   CardTitle,
   CardFooter
 } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+
+interface EnrichedAssignment {
+  subjectId: string;
+  code: string;
+  lectureTypes: string;
+  name: string;
+}
 
 export default function DashboardPage() {
   const { toast } = useToast();
-  const [assignments, setAssignments] = useState<StaffAssignmentsResponse | null>(null);
+  const [enrichedAssignments, setEnrichedAssignments] = useState<EnrichedAssignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchAssignments = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/staff/assignments');
-      if (!res.ok) {
-        throw new Error("Failed to fetch assignments. Please log in again.");
+      const [assignmentsRes, subjectsRes] = await Promise.all([
+        fetch('/api/staff/assignments'),
+        fetch('/api/admin/subjects') // Use admin route to get all subject details
+      ]);
+      
+      if (!assignmentsRes.ok) {
+        throw new Error("Failed to fetch your assignments. Please log in again.");
       }
-      const data = await res.json();
-      setAssignments(data);
+       if (!subjectsRes.ok) {
+        throw new Error("Failed to fetch subject details.");
+      }
+
+      const assignments: StaffAssignmentsResponse = await assignmentsRes.json();
+      const allSubjects: Subject[] = await subjectsRes.json();
+
+      const subjectsMap = new Map(allSubjects.map(s => [s.id, s.subject_name]));
+
+      const enriched = Object.entries(assignments).map(([subjectId, assignment]) => ({
+        subjectId,
+        code: assignment.subject_code,
+        lectureTypes: Object.keys(assignment.lecture_types).join(', '),
+        name: subjectsMap.get(parseInt(subjectId)) || 'Unknown Subject',
+      }));
+
+      setEnrichedAssignments(enriched);
+
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
-      setAssignments(null);
+      setEnrichedAssignments([]);
     } finally {
       setIsLoading(false);
     }
@@ -62,8 +90,6 @@ export default function DashboardPage() {
         </div>
     );
   }
-  
-  const assignmentKeys = assignments ? Object.keys(assignments) : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,23 +99,18 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {assignments && assignmentKeys.length > 0 ? (
-          assignmentKeys.map((subjectId) => {
-            const assignment = assignments[subjectId];
-            const lectureTypes = Object.keys(assignment.lecture_types).join(', ');
-
+        {enrichedAssignments.length > 0 ? (
+          enrichedAssignments.map((assignment) => {
             return (
-              <Link href={`/attendance/${subjectId}`} key={subjectId} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
+              <Link href={`/attendance/${assignment.subjectId}`} key={assignment.subjectId} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
                 <Card className="hover:border-primary/80 transition-colors h-full flex flex-col hover:shadow-lg">
                   <CardHeader className="flex-grow">
-                    <div className="flex items-start gap-4">
-                      <BookCopy className="h-8 w-8 text-primary flex-shrink-0 mt-1" />
-                      <div>
-                        <CardTitle className="text-lg leading-tight">{assignment.code}</CardTitle>
-                        <CardDescription className="mt-1">
-                          Types: {lectureTypes}
-                        </CardDescription>
-                      </div>
+                    <div className="flex flex-col gap-2">
+                       <Badge variant="outline" className="w-fit">{assignment.code}</Badge>
+                       <CardTitle className="text-lg leading-tight">{assignment.name}</CardTitle>
+                       <CardDescription>
+                          Types: {assignment.lectureTypes}
+                       </CardDescription>
                     </div>
                   </CardHeader>
                   <CardFooter>

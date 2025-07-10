@@ -24,7 +24,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </p>
       </div>
       <Tabs value={getTabValue()} className="w-full">
-        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto sm:h-10">
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto sm:h-10 flex-wrap">
           <TabsTrigger value="staff" asChild>
             <Link href="/dashboard/admin/staff"><Users className="mr-2 h-4 w-4" />Staff</Link>
           </TabsTrigger>

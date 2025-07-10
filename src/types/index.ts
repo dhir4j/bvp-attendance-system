@@ -26,6 +26,7 @@ export interface Assignment {
 // Type for the data returned by /staff/assignments
 export interface StaffAssignmentDetails {
     subject_code: string;
+    subject_name?: string; // Optional: To be enriched on the frontend
     lecture_types: {
         [key: string]: (number | null)[] // e.g. 'TH': [null], 'PR': [1, 2]
     }

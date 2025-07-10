@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookCopy, Home, LogOut, Shield } from "lucide-react"
+import { BookCopy, Home, LogOut, Shield, User } from "lucide-react"
 
 import {
   Sidebar,
@@ -14,21 +14,32 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar"
 
-export function AppSidebar() {
+interface AppSidebarProps {
+    isAdmin: boolean;
+}
+
+export function AppSidebar({ isAdmin }: AppSidebarProps) {
   const pathname = usePathname()
 
-  const menuItems = [
+  const staffMenuItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
-    // { href: "/dashboard/defaulters", label: "Defaulters", icon: UserX },
-    { href: "/dashboard/admin", label: "Admin Panel", icon: Shield },
   ]
+
+  const adminMenuItems = [
+      { href: "/dashboard/admin", label: "Admin Panel", icon: Shield },
+  ]
+  
+  const menuItems = isAdmin ? adminMenuItems : staffMenuItems;
 
   return (
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-2 p-2">
           <BookCopy className="h-8 w-8 text-primary" />
-          <h1 className="text-xl font-headline font-bold">BVP Attendance</h1>
+          <div>
+            <h1 className="text-lg font-headline font-bold leading-tight">BVP Attendance</h1>
+            <p className="text-xs text-muted-foreground">{isAdmin ? "Admin" : "Staff"}</p>
+          </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -38,7 +49,6 @@ export function AppSidebar() {
               <SidebarMenuButton
                 asChild
                 isActive={pathname.startsWith(item.href) && (item.href !== '/dashboard' || pathname === '/dashboard')}
-                className="bg-transparent data-[active=true]:bg-primary/20 data-[active=true]:text-primary-foreground"
               >
                 <Link href={item.href}>
                   <item.icon className="h-5 w-5" />
