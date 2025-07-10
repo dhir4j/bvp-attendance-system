@@ -9,9 +9,9 @@ export interface Subject {
   id: number;
   course_code: string;
   dept_code: string;
-  semester: number;
-  code: string;
-  name: string;
+  semester_number: number;
+  subject_code: string;
+  subject_name: string;
 }
 
 export interface Assignment {
@@ -25,7 +25,7 @@ export interface Assignment {
 
 // Type for the data returned by /staff/assignments
 export interface StaffAssignmentDetails {
-    code: string; // subject code
+    subject_code: string;
     lecture_types: {
         [key: string]: (number | null)[] // e.g. 'TH': [null], 'PR': [1, 2]
     }

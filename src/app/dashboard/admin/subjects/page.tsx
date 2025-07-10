@@ -41,12 +41,12 @@ const initialFormData = {
     id: 0,
     course_code: "",
     dept_code: "",
-    semester: "" as number | "",
-    code: "",
-    name: ""
+    semester_number: "" as number | "",
+    subject_code: "",
+    subject_name: ""
 };
 
-type FormDataType = Omit<Subject, 'id' | 'semester'> & { id: number; semester: number | "" };
+type FormDataType = Omit<Subject, 'id' | 'semester_number'> & { id: number; semester_number: number | "" };
 
 
 export default function SubjectsPage() {
@@ -80,11 +80,11 @@ export default function SubjectsPage() {
     if (subject) {
       setFormData({
         id: subject.id,
-        name: subject.name,
-        code: subject.code,
+        subject_name: subject.subject_name,
+        subject_code: subject.subject_code,
         course_code: subject.course_code,
         dept_code: subject.dept_code,
-        semester: subject.semester
+        semester_number: subject.semester_number
       })
     } else {
       setFormData(initialFormData)
@@ -98,7 +98,7 @@ export default function SubjectsPage() {
   }
 
   const handleSave = async () => {
-    if (!formData.semester || formData.semester < 1 || formData.semester > 8) {
+    if (!formData.semester_number || formData.semester_number < 1 || formData.semester_number > 8) {
       toast({ variant: "destructive", title: "Invalid Semester", description: "Semester must be a number between 1 and 8." });
       return;
     }
@@ -107,14 +107,14 @@ export default function SubjectsPage() {
     const method = selectedSubject ? "PUT" : "POST";
 
     const body:any = {
-      subject_name: formData.name,
-      subject_code: formData.code,
+      subject_name: formData.subject_name,
+      subject_code: formData.subject_code,
     }
 
     if (!selectedSubject) {
         body.course_code = formData.course_code;
         body.dept_code = formData.dept_code;
-        body.semester_number = formData.semester;
+        body.semester_number = formData.semester_number;
     }
     
     try {
@@ -136,7 +136,7 @@ export default function SubjectsPage() {
   }
   
   const handleDelete = async (subjectId: number) => {
-    if(!confirm("Are you sure? This will also delete related assignments.")) return;
+    if(!confirm("Are you sure? This may also affect related assignments.")) return;
     try {
         const res = await fetch(`/api/admin/subjects/${subjectId}`, { method: "DELETE" });
         if(!res.ok) {
@@ -153,16 +153,16 @@ export default function SubjectsPage() {
   const handleSemesterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === "") {
-        setFormData({...formData, semester: ""});
+        setFormData({...formData, semester_number: ""});
         return;
     }
     const numValue = parseInt(value, 10);
     if (!isNaN(numValue) && numValue >= 1 && numValue <= 8) {
-        setFormData({...formData, semester: numValue});
+        setFormData({...formData, semester_number: numValue});
     } else if (value.length > 1) {
       // do nothing to prevent invalid input
     } else {
-      setFormData({...formData, semester: ""});
+      setFormData({...formData, semester_number: ""});
     }
   };
 
@@ -201,11 +201,11 @@ export default function SubjectsPage() {
                 </TableRow>
               ) : subjects.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>{s.code}</TableCell>
+                  <TableCell className="font-medium">{s.subject_name}</TableCell>
+                  <TableCell>{s.subject_code}</TableCell>
                   <TableCell>{s.course_code}</TableCell>
                   <TableCell>{s.dept_code}</TableCell>
-                  <TableCell>{s.semester}</TableCell>
+                  <TableCell>{s.semester_number}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -242,11 +242,11 @@ export default function SubjectsPage() {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="name">Subject Name</Label>
-              <Input id="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} disabled={!!selectedSubject} />
+              <Input id="name" value={formData.subject_name} onChange={(e) => setFormData({...formData, subject_name: e.target.value})} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="code">Subject Abr</Label>
-              <Input id="code" value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} disabled={!!selectedSubject} />
+              <Input id="code" value={formData.subject_code} onChange={(e) => setFormData({...formData, subject_code: e.target.value})} />
             </div>
              <div className="space-y-2">
               <Label htmlFor="course_code">Course Code</Label>
@@ -258,7 +258,7 @@ export default function SubjectsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
-              <Input id="semester" type="number" value={formData.semester} onChange={handleSemesterChange} placeholder="1-8" disabled={!!selectedSubject} />
+              <Input id="semester" type="number" value={formData.semester_number} onChange={handleSemesterChange} placeholder="1-8" disabled={!!selectedSubject} />
             </div>
           </div>
           <DialogFooter>
