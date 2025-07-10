@@ -29,7 +29,7 @@ def get_assignments():
         subj = Subject.query.get(a.subject_id)
         ent  = out.setdefault(a.subject_id,{
             'subject_code': subj.subject_code,
-            'subject_name': subj.subject_name, # <-- ADD THIS LINE
+            'subject_name': subj.subject_name,
             'lecture_types':{}
         })
         ent['lecture_types'].setdefault(a.lecture_type, []).append(a.batch_number)
@@ -44,36 +44,41 @@ def mark_attendance():
     batch        = d.get('batch_number')
     absentees    = set(d.get('absent_rolls', []))
 
-    # validate batch rolls
-    if lec_type!='TH' and batch is not None:
-        valid   = set(get_batch_rolls(batch))
-        invalid = absentees - valid
-        if invalid:
-            return jsonify({'error':f'Invalid rolls: {list(invalid)}'}),400
-        absentees &= valid
+    try:
+        # validate batch rolls
+        if lec_type!='TH' and batch is not None:
+            valid   = set(get_batch_rolls(batch))
+            invalid = absentees - valid
+            if invalid:
+                return jsonify({'error':f'Invalid rolls: {list(invalid)}'}),400
+            absentees &= valid
 
-    sheet   = get_sheet()
-    mapping = subject_column_map.get(subj.subject_code, {}).get(lec_type)
-    if not mapping:
-        return jsonify({'error':'No mapping for this lecture/subject'}),400
+        sheet   = get_sheet()
+        mapping = subject_column_map.get(subj.subject_code, {}).get(lec_type)
+        if not mapping:
+            return jsonify({'error':'No mapping for this lecture/subject'}),400
 
-    key = None if lec_type=='TH' else batch
-    if key not in mapping:
-        return jsonify({'error':'No mapping entry for this batch'}),400
+        key = None if lec_type=='TH' else batch
+        if key not in mapping:
+            return jsonify({'error':'No mapping entry for this batch'}),400
 
-    col_letter, count_cell = mapping[key]
-    col_idx = col_letter_to_index(col_letter)
-    rolls   = sheet.col_values(1)[4:71]
+        col_letter, count_cell = mapping[key]
+        col_idx = col_letter_to_index(col_letter)
+        rolls   = sheet.col_values(1)[4:71]
 
-    # decrement attendance for absentees
-    for idx, r in enumerate(rolls):
-        if r in absentees:
-            row     = idx + 5
-            curr    = cell_value_to_int(sheet.cell(row, col_idx).value)
-            sheet.update_cell(row, col_idx, curr - 1)
+        # decrement attendance for absentees
+        for idx, r in enumerate(rolls):
+            if r in absentees:
+                row     = idx + 5
+                curr    = cell_value_to_int(sheet.cell(row, col_idx).value)
+                sheet.update_cell(row, col_idx, curr - 1)
 
-    # increment lecture count
-    total = cell_value_to_int(sheet.acell(count_cell).value)
-    sheet.update_acell(count_cell, total + 1)
+        # increment lecture count
+        total = cell_value_to_int(sheet.acell(count_cell).value)
+        sheet.update_acell(count_cell, total + 1)
 
-    return jsonify({'message':'Attendance updated'})
+        return jsonify({'message':'Attendance updated'})
+    except RuntimeError as e:
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': 'An unexpected error occurred: ' + str(e)}), 500
