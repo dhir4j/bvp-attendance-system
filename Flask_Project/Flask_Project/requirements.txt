@@ -2,5 +2,9 @@ Flask
 Flask-SQLAlchemy
 Flask-Bcrypt
 gspread
-google-auth
+google-auth-oauthlib
 psycopg2-binary
+Flask-Cors
+oauth2client
+gspread
+
