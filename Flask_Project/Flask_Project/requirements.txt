@@ -5,6 +5,7 @@ gspread
 google-auth-oauthlib
 psycopg2-binary
 Flask-Cors
-oauth2client
 gspread
-
+google-api-python-client
+google-auth-httplib2
+google-auth
