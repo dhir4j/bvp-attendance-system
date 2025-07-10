@@ -81,7 +81,7 @@ export default function AssignmentsPage() {
         return { 
             ...a, 
             staffName: staffMember?.full_name || 'Unknown Staff', 
-            subjectName: subject ? `${subject.name} (${subject.code})` : 'Unknown Subject'
+            subjectName: subject ? `${subject.subject_name} (${subject.subject_code})` : 'Unknown Subject'
         }
     });
   }, [assignments, staff, subjects]);
@@ -169,7 +169,7 @@ export default function AssignmentsPage() {
                                     <SelectValue placeholder="Select Subject" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {subjects.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name} - {s.code}</SelectItem>)}
+                                    {subjects.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.subject_name} - {s.subject_code}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
