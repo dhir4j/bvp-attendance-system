@@ -41,10 +41,13 @@ const initialFormData = {
     id: 0,
     course_code: "",
     dept_code: "",
-    semester: 0,
+    semester: "" as number | "",
     code: "",
     name: ""
 };
+
+type FormDataType = Omit<Subject, 'id' | 'semester'> & { id: number; semester: number | "" };
+
 
 export default function SubjectsPage() {
   const { toast } = useToast()
@@ -52,7 +55,7 @@ export default function SubjectsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null)
-  const [formData, setFormData] = useState<Omit<Subject, 'totalLectures'>>(initialFormData)
+  const [formData, setFormData] = useState<FormDataType>(initialFormData)
   
   const fetchSubjects = useCallback(async () => {
     setIsLoading(true);
@@ -95,6 +98,11 @@ export default function SubjectsPage() {
   }
 
   const handleSave = async () => {
+    if (!formData.semester || formData.semester < 1 || formData.semester > 6) {
+      toast({ variant: "destructive", title: "Invalid Semester", description: "Semester must be a number between 1 and 6." });
+      return;
+    }
+
     const url = selectedSubject ? `/api/admin/subjects/${selectedSubject.id}` : "/api/admin/subjects";
     const method = selectedSubject ? "PUT" : "POST";
 
@@ -138,6 +146,23 @@ export default function SubjectsPage() {
         toast({ variant: "destructive", title: "Error", description: error.message });
     }
   }
+  
+  const handleSemesterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value === "") {
+        setFormData({...formData, semester: ""});
+        return;
+    }
+    const numValue = parseInt(value, 10);
+    if (!isNaN(numValue) && numValue >= 1 && numValue <= 6) {
+        setFormData({...formData, semester: numValue});
+    } else if (value.length > 1) {
+      // do nothing to prevent invalid input
+    } else {
+      setFormData({...formData, semester: ""});
+    }
+  };
+
 
   return (
     <Card>
@@ -230,7 +255,7 @@ export default function SubjectsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
-              <Input id="semester" type="number" value={formData.semester} onChange={(e) => setFormData({...formData, semester: parseInt(e.target.value) || 0})} />
+              <Input id="semester" type="number" value={formData.semester} onChange={handleSemesterChange} placeholder="1-6" />
             </div>
           </div>
           <DialogFooter>
