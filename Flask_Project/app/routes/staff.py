@@ -1,3 +1,4 @@
+
 from flask import Blueprint, request, jsonify, session
 from ..models import Staff, Subject, Assignment
 from .. import bcrypt
@@ -27,40 +28,48 @@ def get_assignments():
     out = {}
     for a in assigns:
         subj = Subject.query.get(a.subject_id)
-        ent  = out.setdefault(a.subject_id,{
+        ent  = out.setdefault(str(a.subject_id),{
             'subject_code': subj.subject_code,
             'subject_name': subj.subject_name,
+            'classroom_name': a.classroom_name,
             'lecture_types':{}
         })
-        ent['lecture_types'].setdefault(a.lecture_type, []).append(a.batch_number)
+        lecture_type_key = a.lecture_type or 'OTH'
+        ent['lecture_types'].setdefault(lecture_type_key, []).append(a.batch_number)
     return jsonify(out)
 
 @staff_bp.route('/attendance', methods=['POST'])
 @staff_required
 def mark_attendance():
-    d            = request.json
-    subj         = Subject.query.get_or_404(d['subject_id'])
-    lec_type     = d.get('lecture_type')
-    batch        = d.get('batch_number')
-    absentees    = set(d.get('absent_rolls', []))
+    d              = request.json
+    subj           = Subject.query.get_or_404(d['subject_id'])
+    lec_type       = d.get('lecture_type')
+    batch          = d.get('batch_number')
+    classroom_name = d.get('classroom_name')
+    absentees      = set(map(str, d.get('absent_rolls', [])))
+
+    if not classroom_name:
+        return jsonify({'error': 'Classroom name is required to find the sheet.'}), 400
 
     try:
-        # validate batch rolls
-        if lec_type!='TH' and batch is not None:
-            valid   = set(get_batch_rolls(batch))
-            invalid = absentees - valid
-            if invalid:
-                return jsonify({'error':f'Invalid rolls: {list(invalid)}'}),400
-            absentees &= valid
+        # get the specific worksheet
+        sheet = get_sheet(classroom_name)
 
-        sheet   = get_sheet()
+        # validate batch rolls
+        if lec_type != 'TH' and batch is not None:
+            valid_rolls = set(map(str, get_batch_rolls(sheet, batch)))
+            invalid = absentees - valid_rolls
+            if invalid:
+                return jsonify({'error':f'Invalid roll numbers for this batch: {list(invalid)}'}),400
+            absentees &= valid_rolls
+
         mapping = subject_column_map.get(subj.subject_code, {}).get(lec_type)
         if not mapping:
-            return jsonify({'error':'No mapping for this lecture/subject'}),400
+            return jsonify({'error':'No column mapping found for this lecture/subject combination'}),400
 
         key = None if lec_type=='TH' else batch
         if key not in mapping:
-            return jsonify({'error':'No mapping entry for this batch'}),400
+            return jsonify({'error':'No column mapping found for this batch'}),400
 
         col_letter, count_cell = mapping[key]
         col_idx = col_letter_to_index(col_letter)
@@ -68,7 +77,7 @@ def mark_attendance():
 
         # decrement attendance for absentees
         for idx, r in enumerate(rolls):
-            if r in absentees:
+            if str(r) in absentees:
                 row     = idx + 5
                 curr    = cell_value_to_int(sheet.cell(row, col_idx).value)
                 sheet.update_cell(row, col_idx, curr - 1)

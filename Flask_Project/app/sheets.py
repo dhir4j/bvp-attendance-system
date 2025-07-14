@@ -1,9 +1,10 @@
+
 import string, gspread
 from google.oauth2.service_account import Credentials
 from google.auth.exceptions import RefreshError
 from config import Config
 
-def get_sheet():
+def get_sheet(worksheet_name):
     scope = [
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive',
@@ -11,11 +12,14 @@ def get_sheet():
     try:
         creds  = Credentials.from_service_account_file(Config.SERVICE_JSON, scopes=scope)
         client = gspread.authorize(creds)
-        return client.open_by_key(Config.SHEET_KEY).worksheet('sem 3 / an sheet')
+        spreadsheet = client.open_by_key(Config.SHEET_KEY)
+        return spreadsheet.worksheet(worksheet_name)
     except RefreshError as e:
         # This is a specific error for auth issues, often related to server clock skew
         # or invalid credentials.
         raise RuntimeError("Could not authenticate with Google Sheets. Check server clock or credentials: " + str(e))
+    except gspread.exceptions.WorksheetNotFound:
+        raise RuntimeError(f"Could not open Google Sheet: Worksheet '{worksheet_name}' not found.")
     except Exception as e:
         # Catch other potential gspread or file errors
         raise RuntimeError("Could not open Google Sheet: " + str(e))
@@ -27,11 +31,10 @@ def col_letter_to_index(letter):
 def cell_value_to_int(val):
     try:
         return int(val)
-    except:
+    except (ValueError, TypeError):
         return 0
 
-def get_batch_rolls(batch):
-    sheet    = get_sheet()
+def get_batch_rolls(sheet, batch):
     all_rows = sheet.col_values(1)[4:71]
     headers  = [i for i,v in enumerate(all_rows) if not v.isdigit()]
     starts   = [0] + [i+1 for i in headers]

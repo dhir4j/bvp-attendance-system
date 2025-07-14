@@ -54,7 +54,7 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
         lecture_type: lectureType,
         batch_number: batchNumber ? parseInt(batchNumber) : null,
         absent_rolls,
-        classroom_name: assignment.classroom_name
+        classroom_name: assignment.classroom_name // Pass the classroom name
     }
 
     try {
@@ -64,10 +64,16 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
             body: JSON.stringify(body)
         });
 
-        const resData = await res.json();
-        if(!res.ok) {
-            throw new Error(resData.error || "Failed to submit attendance");
+        if (!res.ok) {
+            const resData = await res.json().catch(() => ({error: "An unknown error occurred. The server sent a non-JSON response."}));
+            throw new Error(resData.error || `Failed to submit attendance. Server responded with status ${res.status}.`);
         }
+        
+        const resData = await res.json();
+        if (resData.error) {
+           throw new Error(resData.error);
+        }
+
         setShowSuccessDialog(true);
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message});
@@ -85,8 +91,8 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
     <>
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-3xl font-bold font-headline">{assignment.subject_code}</h1>
-          <p className="text-muted-foreground">Mark attendance for your assigned lectures.</p>
+          <h1 className="text-3xl font-bold font-headline">{assignment.subject_name}</h1>
+          <p className="text-muted-foreground">Mark attendance for {assignment.subject_code} in {assignment.classroom_name}.</p>
         </div>
 
         <Card>
