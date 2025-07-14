@@ -45,8 +45,13 @@ export default function AttendancePage({ params }: { params: { subjectId: string
   const subjectAssignment = assignments ? assignments[params.subjectId] : null;
 
   if (!subjectAssignment) {
-    notFound();
+    // It's possible the data isn't loaded yet or there's no assignment
+    // A more graceful loading state might be needed, but for now this works.
+    if (!isLoading) {
+      notFound();
+    }
+    return <div className="p-6">Loading...</div>;
   }
 
-  return <AttendanceSheet subjectId={parseInt(params.subjectId)} assignment={subjectAssignment} />;
+  return <AttendanceSheet subjectId={parseInt(params.subjectId)} subjectDetails={subjectAssignment} />;
 }

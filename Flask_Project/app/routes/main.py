@@ -6,5 +6,5 @@ main_bp = Blueprint('main', __name__)
 def index():
     return jsonify({
         'status': 'ok',
-        'message': 'Welcome to the BVP Attendance API'
+        'message': 'Welcome to the BVP Attendance API - Now with SQL Backend!'
     })

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from 'next/link';
-import { BookCopy, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
 import type { StaffAssignmentsResponse } from '@/types';
@@ -14,16 +14,9 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-interface EnrichedAssignment {
-  subjectId: string;
-  code: string;
-  lectureTypes: string;
-  name: string;
-}
-
 export default function DashboardPage() {
   const { toast } = useToast();
-  const [enrichedAssignments, setEnrichedAssignments] = useState<EnrichedAssignment[]>([]);
+  const [assignmentsBySubject, setAssignmentsBySubject] = useState<StaffAssignmentsResponse>({});
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchAssignments = useCallback(async () => {
@@ -36,19 +29,11 @@ export default function DashboardPage() {
       }
 
       const assignments: StaffAssignmentsResponse = await res.json();
-
-      const enriched = Object.entries(assignments).map(([subjectId, assignment]) => ({
-        subjectId,
-        code: assignment.subject_code,
-        lectureTypes: Object.keys(assignment.lecture_types).join(', '),
-        name: assignment.subject_name || 'Unknown Subject',
-      }));
-
-      setEnrichedAssignments(enriched);
+      setAssignmentsBySubject(assignments);
 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
-      setEnrichedAssignments([]);
+      setAssignmentsBySubject({});
     } finally {
       setIsLoading(false);
     }
@@ -90,17 +75,22 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {enrichedAssignments.length > 0 ? (
-          enrichedAssignments.map((assignment) => {
+        {Object.keys(assignmentsBySubject).length > 0 ? (
+          Object.entries(assignmentsBySubject).map(([subjectId, subjectDetails]) => {
+            const lectureTypes = new Set<string>();
+            subjectDetails.assignments.forEach(a => {
+                Object.keys(a.lecture_types).forEach(lt => lectureTypes.add(lt))
+            })
+
             return (
-              <Link href={`/attendance/${assignment.subjectId}`} key={assignment.subjectId} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
+              <Link href={`/attendance/${subjectId}`} key={subjectId} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
                 <Card className="hover:border-primary/80 transition-colors h-full flex flex-col hover:shadow-lg">
                   <CardHeader className="flex-grow">
                     <div className="flex flex-col gap-2">
-                       <Badge variant="outline" className="w-fit">{assignment.code}</Badge>
-                       <CardTitle className="text-lg leading-tight">{assignment.name}</CardTitle>
+                       <Badge variant="outline" className="w-fit">{subjectDetails.subject_code}</Badge>
+                       <CardTitle className="text-lg leading-tight">{subjectDetails.subject_name}</CardTitle>
                        <CardDescription>
-                          Types: {assignment.lectureTypes}
+                          Types: {Array.from(lectureTypes).join(', ')}
                        </CardDescription>
                     </div>
                   </CardHeader>

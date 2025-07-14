@@ -1,4 +1,11 @@
 from . import db
+from sqlalchemy.orm import relationship
+
+# Association table for the many-to-many relationship between students and batches
+student_batches = db.Table('student_batches',
+    db.Column('student_id', db.Integer, db.ForeignKey('students.id'), primary_key=True),
+    db.Column('batch_id', db.Integer, db.ForeignKey('batches.id'), primary_key=True)
+)
 
 class Department(db.Model):
     __tablename__ = 'departments'
@@ -34,7 +41,10 @@ class Classroom(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     dept_code  = db.Column(db.String, db.ForeignKey('departments.dept_code'), nullable=False)
     class_name = db.Column(db.String, nullable=False)
+    batch_id   = db.Column(db.Integer, db.ForeignKey('batches.id'), nullable=True) # Link classroom to a batch
+    batch      = relationship("Batch", back_populates="classrooms")
     __table_args__ = (db.UniqueConstraint('dept_code','class_name'),)
+
 
 class Assignment(db.Model):
     __tablename__ = 'staff_subject_assignment'
@@ -42,7 +52,46 @@ class Assignment(db.Model):
     staff_id       = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=False)
     subject_id     = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
     lecture_type   = db.Column(db.String, nullable=False)
-    batch_number   = db.Column(db.Integer)
-    classroom_name = db.Column(db.String, nullable=False)
-    worksheet_name = db.Column(db.String, nullable=False, server_default='DefaultSheet') # Added with a default
-    __table_args__ = (db.UniqueConstraint('staff_id','subject_id','lecture_type','batch_number','classroom_name'),)
+    batch_number   = db.Column(db.Integer) # For practicals/tutorials within a larger batch
+    classroom_id   = db.Column(db.Integer, db.ForeignKey('classrooms.id'), nullable=False)
+    classroom      = relationship("Classroom")
+    __table_args__ = (db.UniqueConstraint('staff_id','subject_id','lecture_type','batch_number','classroom_id'),)
+
+
+# --- New Models for Student and Batch Management ---
+
+class Student(db.Model):
+    __tablename__ = 'students'
+    id            = db.Column(db.Integer, primary_key=True)
+    roll_no       = db.Column(db.String, nullable=False)
+    enrollment_no = db.Column(db.String, unique=True, nullable=False)
+    name          = db.Column(db.String, nullable=False)
+    
+    # A student can be in multiple batches over time, but usually one active batch per semester
+    batches = relationship('Batch', secondary=student_batches, back_populates='students')
+
+
+class Batch(db.Model):
+    __tablename__ = 'batches'
+    id            = db.Column(db.Integer, primary_key=True)
+    dept_code     = db.Column(db.String, db.ForeignKey('departments.dept_code'), nullable=False)
+    class_name    = db.Column(db.String, nullable=False) # e.g. "CO2", "AN1"
+    academic_year = db.Column(db.String, nullable=False) # e.g. "2024-2025"
+    semester      = db.Column(db.Integer, nullable=False)
+    
+    students = relationship('Student', secondary=student_batches, back_populates='batches')
+    classrooms = relationship("Classroom", back_populates="batch")
+    
+    __table_args__ = (db.UniqueConstraint('dept_code', 'class_name', 'academic_year', 'semester'),)
+
+
+class AttendanceRecord(db.Model):
+    __tablename__ = 'attendance_records'
+    id             = db.Column(db.Integer, primary_key=True)
+    assignment_id  = db.Column(db.Integer, db.ForeignKey('staff_subject_assignment.id'), nullable=False)
+    attendance_date= db.Column(db.Date, nullable=False)
+    absent_rolls   = db.Column(db.JSON, nullable=False) # Store list of absent roll numbers
+    lecture_type   = db.Column(db.String, nullable=False)
+    batch_number   = db.Column(db.Integer, nullable=True) # For practicals etc.
+    
+    assignment     = relationship("Assignment")

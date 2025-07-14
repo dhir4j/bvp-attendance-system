@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookCopy, Home, LogOut, Shield, User } from "lucide-react"
+import { BookCopy, Home, LogOut, Shield, Users, Group } from "lucide-react"
 
 import {
   Sidebar,
@@ -23,10 +23,15 @@ export function AppSidebar({ isAdmin }: AppSidebarProps) {
 
   const staffMenuItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
+    { href: "/dashboard/defaulters", label: "Defaulters", icon: Shield },
   ]
 
   const adminMenuItems = [
-      { href: "/dashboard/admin", label: "Admin Panel", icon: Shield },
+      { href: "/dashboard/admin/staff", label: "Staff Mgmt", icon: Users },
+      { href: "/dashboard/admin/subjects", label: "Subjects Mgmt", icon: BookCopy },
+      { href: "/dashboard/admin/assignments", label: "Assignments", icon: Home },
+      // { href: "/dashboard/admin/students", label: "Students", icon: Users },
+      // { href: "/dashboard/admin/batches", label: "Batches", icon: Group },
   ]
   
   const menuItems = isAdmin ? adminMenuItems : staffMenuItems;

@@ -1,60 +1,102 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle, Plus, Users, X } from "lucide-react"
-
-import type { StaffAssignmentDetails } from "@/types"
+import { CheckCircle, Users, X } from "lucide-react"
+import type { SubjectAssignmentDetails, Student } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
+import { Checkbox } from "../ui/checkbox"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
 
 interface AttendanceSheetProps {
   subjectId: number;
-  assignment: StaffAssignmentDetails;
+  subjectDetails: SubjectAssignmentDetails;
 }
 
-export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps) {
+export function AttendanceSheet({ subjectId, subjectDetails }: AttendanceSheetProps) {
   const router = useRouter()
   const { toast } = useToast()
 
-  const [lectureType, setLectureType] = useState<string>("")
-  const [batchNumber, setBatchNumber] = useState<string>("")
-  const [absentRolls, setAbsentRolls] = useState("")
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>("")
+  const [selectedLectureType, setSelectedLectureType] = useState<string>("")
+  const [selectedBatchNumber, setSelectedBatchNumber] = useState<string>("")
+
+  const [students, setStudents] = useState<Student[]>([])
+  const [absentRolls, setAbsentRolls] = useState<Set<string>>(new Set())
+
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  
-  const lectureTypes = Object.keys(assignment.lecture_types);
-  const batches = lectureType ? assignment.lecture_types[lectureType] : [];
+
+  const selectedAssignment = useMemo(() => {
+    return subjectDetails.assignments.find(a => String(a.assignment_id) === selectedAssignmentId)
+  }, [selectedAssignmentId, subjectDetails.assignments])
+
+  const lectureTypes = useMemo(() => {
+    return selectedAssignment ? Object.keys(selectedAssignment.lecture_types) : []
+  }, [selectedAssignment])
+
+  const batches = useMemo(() => {
+    return selectedAssignment && selectedLectureType ? selectedAssignment.lecture_types[selectedLectureType] : []
+  }, [selectedAssignment, selectedLectureType])
+
+  const batchId = selectedAssignment?.classroom_name; // This needs to be improved to get batch_id
+
+  // Fetch students when assignment (and thus batch) is selected
+  useEffect(() => {
+    if (selectedAssignment) {
+      const fetchStudents = async () => {
+        // This is a placeholder, need to get the actual batch_id associated with the classroom
+        const temp_batch_id = 1; // You need a way to link classroom to a batch
+        // const res = await fetch(`/api/staff/batches/${temp_batch_id}/students`)
+        // if(res.ok) {
+        //   const data = await res.json();
+        //   setStudents(data);
+        // }
+      }
+      // fetchStudents();
+    }
+  }, [selectedAssignment])
+
+
+  const handleToggleAbsent = (roll_no: string) => {
+    setAbsentRolls(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(roll_no)) {
+            newSet.delete(roll_no);
+        } else {
+            newSet.add(roll_no);
+        }
+        return newSet;
+    });
+  };
+
   
   const handleSubmit = async () => {
-    if(!lectureType) {
-        toast({ variant: "destructive", title: "Error", description: "Please select a lecture type."});
+    if(!selectedAssignmentId || !selectedLectureType) {
+        toast({ variant: "destructive", title: "Error", description: "Please select a classroom and lecture type."});
         return;
     }
     
-    const isBatchRequired = lectureType === 'PR' || lectureType === 'TU';
-    if(isBatchRequired && !batchNumber) {
+    const isBatchRequired = selectedLectureType === 'PR' || selectedLectureType === 'TU';
+    if(isBatchRequired && !selectedBatchNumber) {
         toast({ variant: "destructive", title: "Error", description: "Please select a batch for this lecture type."});
         return;
     }
     
     setIsLoading(true);
 
-    const absent_rolls = absentRolls.split(/[\s,]+/).filter(Boolean).map(r => r.toUpperCase());
-
     const body = {
-        subject_id: subjectId,
-        lecture_type: lectureType,
-        batch_number: batchNumber ? parseInt(batchNumber) : null,
-        absent_rolls,
-        classroom_name: assignment.classroom_name // Pass the classroom name
+        assignment_id: parseInt(selectedAssignmentId),
+        lecture_type: selectedLectureType,
+        batch_number: selectedBatchNumber ? parseInt(selectedBatchNumber) : null,
+        absent_rolls: Array.from(absentRolls),
     }
 
     try {
@@ -65,15 +107,10 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
         });
 
         if (!res.ok) {
-            const resData = await res.json().catch(() => ({error: "An unknown error occurred. The server sent a non-JSON response."}));
-            throw new Error(resData.error || `Failed to submit attendance. Server responded with status ${res.status}.`);
+            const resData = await res.json().catch(() => ({error: "An unknown error occurred."}));
+            throw new Error(resData.error || `Failed to submit attendance.`);
         }
         
-        const resData = await res.json();
-        if (resData.error) {
-           throw new Error(resData.error);
-        }
-
         setShowSuccessDialog(true);
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message});
@@ -91,27 +128,36 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
     <>
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-3xl font-bold font-headline">{assignment.subject_name}</h1>
-          <p className="text-muted-foreground">Mark attendance for {assignment.subject_code} in {assignment.classroom_name}.</p>
+          <h1 className="text-3xl font-bold font-headline">{subjectDetails.subject_name}</h1>
+          <p className="text-muted-foreground">Mark attendance for {subjectDetails.subject_code}.</p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>Session Details</CardTitle>
-            <CardDescription>Select the lecture type and batch for this session.</CardDescription>
+            <CardDescription>Select the classroom, lecture type, and batch for this session.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-6 md:grid-cols-2">
+          <CardContent className="grid gap-6 md:grid-cols-3">
+             <div className="space-y-2">
+                <Label>Classroom</Label>
+                <Select value={selectedAssignmentId} onValueChange={setSelectedAssignmentId}>
+                    <SelectTrigger><SelectValue placeholder="Select classroom" /></SelectTrigger>
+                    <SelectContent>
+                        {subjectDetails.assignments.map((a) => (
+                            <SelectItem key={a.assignment_id} value={String(a.assignment_id)}>
+                            {a.classroom_name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
             <div className="space-y-2">
               <Label>Lecture Type</Label>
-              <Select value={lectureType} onValueChange={setLectureType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select lecture type" />
-                </SelectTrigger>
+              <Select value={selectedLectureType} onValueChange={setSelectedLectureType} disabled={!selectedAssignmentId}>
+                <SelectTrigger><SelectValue placeholder="Select lecture type" /></SelectTrigger>
                 <SelectContent>
                   {lectureTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -119,14 +165,12 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
             {batches && batches.length > 0 && batches[0] !== null && (
                  <div className="space-y-2">
                     <Label>Batch Number</Label>
-                    <Select value={batchNumber} onValueChange={setBatchNumber}>
-                        <SelectTrigger disabled={!lectureType}>
-                            <SelectValue placeholder="Select batch" />
-                        </SelectTrigger>
+                    <Select value={selectedBatchNumber} onValueChange={setSelectedBatchNumber} disabled={!selectedLectureType}>
+                        <SelectTrigger><SelectValue placeholder="Select batch" /></SelectTrigger>
                         <SelectContent>
                         {batches.map((batch) => (
                             <SelectItem key={batch} value={String(batch)}>
-                            Batch {batch}
+                                Batch {batch}
                             </SelectItem>
                         ))}
                         </SelectContent>
@@ -139,7 +183,12 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
         <Card>
           <CardHeader>
             <CardTitle>Mark Absentees</CardTitle>
-            <CardDescription>Enter the roll numbers of all absent students, separated by commas or spaces.</CardDescription>
+            <CardDescription>
+              {students.length > 0 
+                ? "Uncheck the box for any absent students."
+                : "Enter roll numbers of absentees, separated by commas or spaces."
+              }
+            </CardDescription>
           </CardHeader>
           <CardContent>
              <div className="flex flex-col gap-2 mb-4">
@@ -147,8 +196,8 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
                 <Textarea
                     id="absent-rolls"
                     placeholder="e.g., 2K22/A/01, 2K22/A/05, 2K22/A/12"
-                    value={absentRolls}
-                    onChange={(e) => setAbsentRolls(e.target.value)}
+                    value={Array.from(absentRolls).join(", ")}
+                    onChange={(e) => setAbsentRolls(new Set(e.target.value.split(/[\s,]+/).filter(Boolean)))}
                     rows={5}
                 />
              </div>
@@ -160,7 +209,7 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Users className="h-6 w-6 text-muted-foreground" />
-            <span className="font-medium">{absentRolls.split(/[\s,]+/).filter(Boolean).length}</span>
+            <span className="font-medium">{absentRolls.size}</span>
             <span className="text-muted-foreground">student(s) marked absent</span>
           </div>
           <div className="flex gap-4">
@@ -182,7 +231,7 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
             </div>
             <h3 className="mt-4 text-2xl font-semibold font-headline">Attendance Recorded!</h3>
             <p className="mt-2 text-muted-foreground">
-                Attendance has been successfully saved.
+                Attendance has been successfully saved to the database.
             </p>
             <Button onClick={handleDialogClose} className="mt-6 w-full">
                 Done

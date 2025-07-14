@@ -21,20 +21,42 @@ export interface Assignment {
   subject_id: number;
   lecture_type: 'TH' | 'PR' | 'TU';
   batch_number: number | null;
-  classroom_name: string;
-  worksheet_name: string; // Added field
+  classroom_id: number;
 }
 
 // Type for the data returned by /staff/assignments
-export interface StaffAssignmentDetails {
+// This is now grouped by subject
+export interface SubjectAssignmentDetails {
     subject_code: string;
     subject_name: string;
-    classroom_name: string;
-    lecture_types: {
-        [key: string]: (number | null)[] // e.g. 'TH': [null], 'PR': [1, 2]
-    }
+    assignments: {
+        assignment_id: number;
+        classroom_name: string;
+        lecture_types: {
+            [key: string]: (number | null)[] // e.g. 'TH': [null], 'PR': [1, 2]
+        }
+    }[];
 }
 
 export type StaffAssignmentsResponse = {
-    [subject_id: string]: StaffAssignmentDetails
+    [subject_id: string]: SubjectAssignmentDetails
+}
+
+// --- New Types for Student and Batch Management ---
+
+export interface Student {
+    id: number;
+    roll_no: string;
+    enrollment_no: string;
+    name: string;
+}
+
+export interface Batch {
+    id: number;
+    dept_code: string;
+    class_name: string;
+    academic_year: string;
+    semester: number;
+    student_count?: number;
+    students?: Student[];
 }
