@@ -1,3 +1,4 @@
+
 from flask import Blueprint, request, jsonify, session
 from ..models import Staff, Subject, Assignment, AttendanceRecord
 from .. import db, bcrypt
@@ -27,7 +28,8 @@ def get_assignments():
         ent  = out.setdefault(a.subject_id,{
             'subject_code': subj.subject_code,
             'subject_name': subj.subject_name,
-            'lecture_types':{}
+            'lecture_types':{},
+            'classroom_name': a.classroom_name
         })
         ent['lecture_types'].setdefault(a.lecture_type, []).append(a.batch_number)
     return jsonify(out)

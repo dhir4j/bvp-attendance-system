@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -52,7 +53,8 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
         subject_id: subjectId,
         lecture_type: lectureType,
         batch_number: batchNumber ? parseInt(batchNumber) : null,
-        absent_rolls
+        absent_rolls,
+        classroom_name: assignment.classroom_name
     }
 
     try {
@@ -83,7 +85,7 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
     <>
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-3xl font-bold font-headline">{assignment.code}</h1>
+          <h1 className="text-3xl font-bold font-headline">{assignment.subject_code}</h1>
           <p className="text-muted-foreground">Mark attendance for your assigned lectures.</p>
         </div>
 

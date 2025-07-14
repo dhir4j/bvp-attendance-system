@@ -1,3 +1,4 @@
+
 export interface Staff {
   id: number;
   username: string;
@@ -26,7 +27,8 @@ export interface Assignment {
 // Type for the data returned by /staff/assignments
 export interface StaffAssignmentDetails {
     subject_code: string;
-    subject_name: string; // Now included from the backend
+    subject_name: string;
+    classroom_name: string;
     lecture_types: {
         [key: string]: (number | null)[] // e.g. 'TH': [null], 'PR': [1, 2]
     }
