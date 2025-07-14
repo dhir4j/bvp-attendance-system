@@ -39,6 +39,15 @@ import { Input } from "@/components/ui/input"
 import type { Staff, Subject, Assignment } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 
+const initialNewAssignment = {
+    staff_id: "",
+    subject_id: "",
+    lecture_type: "",
+    batch_number: null as number | null,
+    classroom_name: "",
+    worksheet_name: "",
+};
+
 export default function AssignmentsPage() {
   const { toast } = useToast()
   const [assignments, setAssignments] = useState<Assignment[]>([])
@@ -47,7 +56,7 @@ export default function AssignmentsPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [newAssignment, setNewAssignment] = useState({ staff_id: "", subject_id: "", lecture_type: "", batch_number: null as number | null, classroom_name: "" })
+  const [newAssignment, setNewAssignment] = useState(initialNewAssignment);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -87,7 +96,7 @@ export default function AssignmentsPage() {
   }, [assignments, staff, subjects]);
 
   const handleSave = async () => {
-    if(newAssignment.staff_id && newAssignment.subject_id && newAssignment.lecture_type && newAssignment.classroom_name) {
+    if(newAssignment.staff_id && newAssignment.subject_id && newAssignment.lecture_type && newAssignment.classroom_name && newAssignment.worksheet_name) {
         try {
             const res = await fetch("/api/admin/assignments", {
                 method: "POST",
@@ -105,7 +114,7 @@ export default function AssignmentsPage() {
             toast({ title: "Success", description: "Assignment created." });
             fetchData();
             setIsModalOpen(false);
-            setNewAssignment({ staff_id: "", subject_id: "", lecture_type: "", batch_number: null, classroom_name: "" });
+            setNewAssignment(initialNewAssignment);
         } catch (error: any) {
             toast({ variant: "destructive", title: "Error", description: error.message });
         }
@@ -196,6 +205,10 @@ export default function AssignmentsPage() {
                             <Label htmlFor="classroom_name">Classroom Name</Label>
                             <Input id="classroom_name" placeholder="e.g. C-101" value={newAssignment.classroom_name} onChange={(e) => setNewAssignment({...newAssignment, classroom_name: e.target.value})} />
                         </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="worksheet_name">Worksheet Name</Label>
+                            <Input id="worksheet_name" placeholder="Exact name of sheet in Google Sheets" value={newAssignment.worksheet_name} onChange={(e) => setNewAssignment({...newAssignment, worksheet_name: e.target.value})} />
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
@@ -215,13 +228,14 @@ export default function AssignmentsPage() {
                     <TableHead>Type</TableHead>
                     <TableHead>Batch</TableHead>
                     <TableHead>Classroom</TableHead>
+                    <TableHead>Worksheet</TableHead>
                     <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
                 </TableHeader>
                 <TableBody>
                 {isLoading ? (
                     <TableRow>
-                        <TableCell colSpan={6} className="text-center">Loading...</TableCell>
+                        <TableCell colSpan={7} className="text-center">Loading...</TableCell>
                     </TableRow>
                 ) : assignedData.map((a) => (
                     <TableRow key={a.id}>
@@ -230,6 +244,7 @@ export default function AssignmentsPage() {
                     <TableCell>{a.lecture_type}</TableCell>
                     <TableCell>{a.batch_number ?? 'N/A'}</TableCell>
                     <TableCell>{a.classroom_name}</TableCell>
+                    <TableCell>{a.worksheet_name}</TableCell>
                     <TableCell className="text-right">
                         <Button variant="ghost" size="icon" onClick={() => handleDelete(a.id)} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
                         <Trash2 className="h-4 w-4" />

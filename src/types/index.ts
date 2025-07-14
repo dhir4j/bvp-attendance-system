@@ -22,6 +22,7 @@ export interface Assignment {
   lecture_type: 'TH' | 'PR' | 'TU';
   batch_number: number | null;
   classroom_name: string;
+  worksheet_name: string; // Added field
 }
 
 // Type for the data returned by /staff/assignments

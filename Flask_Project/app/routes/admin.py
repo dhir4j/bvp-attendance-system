@@ -262,13 +262,14 @@ def manage_assignments():
             'subject_id': a.subject_id,
             'lecture_type': a.lecture_type,
             'batch_number': a.batch_number,
-            'classroom_name': a.classroom_name
+            'classroom_name': a.classroom_name,
+            'worksheet_name': a.worksheet_name,
         } for a in Assignment.query.all()]
         return jsonify(result), 200
 
     # POST → create new assignment
     data = request.json or {}
-    for field in ('staff_id','subject_id','lecture_type','classroom_name'):
+    for field in ('staff_id','subject_id','lecture_type','classroom_name', 'worksheet_name'):
         if field not in data:
             return jsonify({'error': f'{field} is required'}), 400
 
@@ -282,7 +283,8 @@ def manage_assignments():
         subject_id     = data['subject_id'],
         lecture_type   = data['lecture_type'],
         batch_number   = data.get('batch_number'),
-        classroom_name = data['classroom_name']
+        classroom_name = data['classroom_name'],
+        worksheet_name = data['worksheet_name']
     )
     db.session.add(a)
     try:

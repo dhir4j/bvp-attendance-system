@@ -44,4 +44,5 @@ class Assignment(db.Model):
     lecture_type   = db.Column(db.String, nullable=False)
     batch_number   = db.Column(db.Integer)
     classroom_name = db.Column(db.String, nullable=False)
+    worksheet_name = db.Column(db.String, nullable=False, server_default='DefaultSheet') # Added with a default
     __table_args__ = (db.UniqueConstraint('staff_id','subject_id','lecture_type','batch_number','classroom_name'),)

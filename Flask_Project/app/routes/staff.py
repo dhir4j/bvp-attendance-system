@@ -8,6 +8,7 @@ from ..sheets import (
     cell_value_to_int, get_batch_rolls,
     subject_column_map
 )
+from google.auth.exceptions import RefreshError
 
 staff_bp = Blueprint('staff', __name__)
 
@@ -42,31 +43,41 @@ def get_assignments():
 @staff_required
 def mark_attendance():
     d              = request.json
-    subj           = Subject.query.get_or_404(d['subject_id'])
-    lec_type       = d.get('lecture_type')
-    batch          = d.get('batch_number')
+    staff_id       = session['staff_id']
+    subject_id     = d['subject_id']
+    lecture_type   = d.get('lecture_type')
+    batch_number   = d.get('batch_number')
     absentees      = set(map(str, d.get('absent_rolls', [])))
 
-    # Dynamically construct worksheet name
-    worksheet_name = f"sem {subj.semester_number} / {subj.dept_code.lower()} sheet"
+    # Find the specific assignment to get the worksheet_name
+    assignment = Assignment.query.filter_by(
+        staff_id=staff_id,
+        subject_id=subject_id,
+        lecture_type=lecture_type,
+        batch_number=batch_number
+    ).first()
+
+    if not assignment:
+        return jsonify({'error': 'Could not find a matching assignment for this lecture.'}), 404
 
     try:
-        # get the specific worksheet
-        sheet = get_sheet(worksheet_name)
+        # get the specific worksheet using the name from the assignment
+        sheet = get_sheet(assignment.worksheet_name)
+        subj = Subject.query.get(subject_id)
 
         # validate batch rolls
-        if lec_type != 'TH' and batch is not None:
-            valid_rolls = set(map(str, get_batch_rolls(sheet, batch)))
+        if lecture_type != 'TH' and batch_number is not None:
+            valid_rolls = set(map(str, get_batch_rolls(sheet, batch_number)))
             invalid = absentees - valid_rolls
             if invalid:
                 return jsonify({'error':f'Invalid roll numbers for this batch: {list(invalid)}'}),400
             absentees &= valid_rolls
 
-        mapping = subject_column_map.get(subj.subject_code, {}).get(lec_type)
+        mapping = subject_column_map.get(subj.subject_code, {}).get(lecture_type)
         if not mapping:
             return jsonify({'error':'No column mapping found for this lecture/subject combination'}),400
 
-        key = None if lec_type=='TH' else batch
+        key = None if lecture_type=='TH' else batch_number
         if key not in mapping:
             return jsonify({'error':'No column mapping found for this batch'}),400
 
@@ -86,6 +97,9 @@ def mark_attendance():
         sheet.update_acell(count_cell, total + 1)
 
         return jsonify({'message':'Attendance updated'})
+    except RefreshError as e:
+        # Catch the specific Google auth error
+        return jsonify({'error': 'Could not authenticate with Google Sheets. Check server clock or credentials: ' + str(e)}), 500
     except RuntimeError as e:
         return jsonify({'error': str(e)}), 500
     except Exception as e:
