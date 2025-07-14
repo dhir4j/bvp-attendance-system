@@ -18,12 +18,17 @@ def create_app():
 
     # --- create tables and seed default departments ---
     with app.app_context():
+        from .models import Department, Assignment, Classroom
+        
+        # This is a temporary and aggressive way to handle schema changes in development.
+        # For production, a migration tool like Alembic would be used.
+        # We drop the table to force it to be recreated with the new columns.
+        Assignment.__table__.drop(db.engine, checkfirst=True)
+        
         # 1) create any missing tables or columns
         db.create_all()
 
         # 2) seed only-if-missing the five depts
-        from .models import Department
-
         default_depts = [
             ("AN", "Artificial Intelligence and Machine Learning"),
             ("CE", "Civil Engineering"),

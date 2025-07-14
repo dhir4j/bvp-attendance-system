@@ -15,6 +15,13 @@ export interface Subject {
   subject_name: string;
 }
 
+export interface Classroom {
+  id: number;
+  dept_code: string;
+  class_name: string;
+  batch_id: number | null;
+}
+
 export interface Assignment {
   id: number;
   staff_id: number;
