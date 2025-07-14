@@ -18,14 +18,14 @@ def create_app():
 
     # --- create tables and seed default departments ---
     with app.app_context():
-        from .models import Department, Assignment, Classroom, AttendanceRecord
+        from .models import Department, Assignment, Classroom, AttendanceRecord, Batch, Student
         
         # This is a temporary and aggressive way to handle schema changes in development.
         # For production, a migration tool like Alembic would be used.
         # We must drop tables in the correct order of dependency.
-        # AttendanceRecord depends on Assignment, so drop it first.
         AttendanceRecord.__table__.drop(db.engine, checkfirst=True)
         Assignment.__table__.drop(db.engine, checkfirst=True)
+        Classroom.__table__.drop(db.engine, checkfirst=True)
         
         # 1) create any missing tables or columns
         db.create_all()
