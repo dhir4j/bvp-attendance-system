@@ -60,9 +60,15 @@ def mark_attendance():
     if not assignment:
         return jsonify({'error': 'Could not find a matching assignment for this lecture.'}), 404
 
+    # Use getattr for safe access to worksheet_name, with a fallback.
+    worksheet_name = getattr(assignment, 'worksheet_name', None)
+    if not worksheet_name:
+         return jsonify({'error': 'Assignment is missing a worksheet name. Please ask an admin to update it.'}), 400
+
+
     try:
         # get the specific worksheet using the name from the assignment
-        sheet = get_sheet(assignment.worksheet_name)
+        sheet = get_sheet(worksheet_name)
         subj = Subject.query.get(subject_id)
 
         # validate batch rolls

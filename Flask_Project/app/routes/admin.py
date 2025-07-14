@@ -256,15 +256,19 @@ def delete_classroom(cls_id):
 @admin_required
 def manage_assignments():
     if request.method == 'GET':
-        result = [{
-            'id': a.id,
-            'staff_id': a.staff_id,
-            'subject_id': a.subject_id,
-            'lecture_type': a.lecture_type,
-            'batch_number': a.batch_number,
-            'classroom_name': a.classroom_name,
-            'worksheet_name': a.worksheet_name,
-        } for a in Assignment.query.all()]
+        assignments = Assignment.query.all()
+        # Handle cases where worksheet_name might not exist in older rows
+        result = []
+        for a in assignments:
+            result.append({
+                'id': a.id,
+                'staff_id': a.staff_id,
+                'subject_id': a.subject_id,
+                'lecture_type': a.lecture_type,
+                'batch_number': a.batch_number,
+                'classroom_name': a.classroom_name,
+                'worksheet_name': getattr(a, 'worksheet_name', 'DefaultSheet'),
+            })
         return jsonify(result), 200
 
     # POST → create new assignment
