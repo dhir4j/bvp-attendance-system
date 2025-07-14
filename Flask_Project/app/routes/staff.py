@@ -45,15 +45,14 @@ def mark_attendance():
     subj           = Subject.query.get_or_404(d['subject_id'])
     lec_type       = d.get('lecture_type')
     batch          = d.get('batch_number')
-    classroom_name = d.get('classroom_name')
     absentees      = set(map(str, d.get('absent_rolls', [])))
 
-    if not classroom_name:
-        return jsonify({'error': 'Classroom name is required to find the sheet.'}), 400
+    # Dynamically construct worksheet name
+    worksheet_name = f"sem {subj.semester_number} / {subj.dept_code.lower()} sheet"
 
     try:
         # get the specific worksheet
-        sheet = get_sheet(classroom_name)
+        sheet = get_sheet(worksheet_name)
 
         # validate batch rolls
         if lec_type != 'TH' and batch is not None:
