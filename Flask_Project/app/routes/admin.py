@@ -1,3 +1,4 @@
+
 from flask import Blueprint, request, jsonify, session
 from sqlalchemy.exc import IntegrityError, OperationalError
 from ..models import Staff, Subject, Classroom, Assignment, Department, Batch, Student, student_batches
@@ -159,13 +160,23 @@ def manage_classrooms():
     for field in ('dept_code','class_name'):
         if field not in data: return jsonify({'error': f'{field} is required'}), 400
     
+    # Check for duplicates before attempting to create
+    existing = Classroom.query.filter_by(dept_code=data['dept_code'], class_name=data['class_name']).first()
+    if existing:
+        return jsonify({'error': 'A classroom with this name already exists for the department.'}), 400
+
     new_classroom = Classroom(
         dept_code=data['dept_code'],
         class_name=data['class_name'],
         batch_id=data.get('batch_id')
     )
     db.session.add(new_classroom)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError: # Fallback just in case of a race condition
+        db.session.rollback()
+        return jsonify({'error': 'A classroom with this name already exists for the department.'}), 400
+
     return jsonify({'message': 'Classroom added', 'id': new_classroom.id}), 201
 
 @admin_bp.route('/classrooms/<int:cls_id>', methods=['PUT', 'DELETE'])
@@ -378,3 +389,5 @@ def update_delete_student(student_id):
         db.session.delete(student)
         db.session.commit()
         return jsonify({'message': 'Student deleted'})
+
+    
