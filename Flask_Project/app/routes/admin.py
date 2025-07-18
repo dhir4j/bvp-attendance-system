@@ -188,9 +188,16 @@ def update_delete_classroom(cls_id):
         c.dept_code = data.get('dept_code', c.dept_code)
         c.class_name = data.get('class_name', c.class_name)
         c.batch_id = data.get('batch_id', c.batch_id)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({'error': 'Update failed, likely due to a duplicate name.'}), 400
         return jsonify({'message': 'Classroom updated'}), 200
 
+    # Before deleting a classroom, nullify its reference in any assignments
+    Assignment.query.filter_by(classroom_id=cls_id).update({'classroom_id': None})
+    
     db.session.delete(c)
     db.session.commit()
     return jsonify({'message': 'Classroom deleted'}), 200
