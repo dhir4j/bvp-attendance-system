@@ -1,34 +1,3 @@
-# from flask import Flask
-# from flask_sqlalchemy import SQLAlchemy
-# from flask_bcrypt import Bcrypt
-# from flask_cors import CORS
-
-# db     = SQLAlchemy()
-# bcrypt = Bcrypt()
-
-# def create_app():
-#     app = Flask(__name__)
-#     app.config.from_object('config.Config')
-#     CORS(app, resources={ r"/*": { "origins": ["https://bvp.scrape.ink"] } })
-
-#     # alternative inline settings:
-#     app.config['SQLALCHEMY_POOL_PRE_PING']  = True
-#     app.config['SQLALCHEMY_POOL_RECYCLE']   = 280
-
-#     db.init_app(app)
-#     bcrypt.init_app(app)
-
-#     with app.app_context():
-#         db.create_all()
-
-#     # register blueprints
-#     from .routes.admin import admin_bp
-#     from .routes.staff import staff_bp
-#     from .routes.main import main_bp
-#     app.register_blueprint(admin_bp, url_prefix='/admin')
-#     app.register_blueprint(staff_bp, url_prefix='/staff')
-#     app.register_blueprint(main_bp, url_prefix='')
-#     return app
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
@@ -47,12 +16,12 @@ def create_app():
     db.init_app(app)
     bcrypt.init_app(app)
 
-    # --- create tables and seed default departments ---
+    # --- create tables if they don't exist ---
     with app.app_context():
-        # 1) create any missing tables
+        # This will create any missing tables without dropping existing ones.
         db.create_all()
 
-        # 2) seed only-if-missing the five depts
+        # Seed default departments if they are missing
         from .models import Department
 
         default_depts = [
@@ -67,7 +36,6 @@ def create_app():
             if not Department.query.get(code):
                 db.session.add(Department(dept_code=code, dept_name=name))
 
-        # commit all at once
         db.session.commit()
 
     # --- register your blueprints ---

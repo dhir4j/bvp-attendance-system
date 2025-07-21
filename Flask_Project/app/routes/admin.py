@@ -1,8 +1,13 @@
 from flask import Blueprint, request, jsonify, session
 from sqlalchemy.exc import IntegrityError, OperationalError
-from ..models import Staff, Subject, Classroom, Assignment, Department
+from ..models import (
+    Staff, Subject, Classroom, Assignment, Department,
+    Batch, Student, student_batches
+)
 from .. import db, bcrypt
 from ..auth import admin_required
+import csv
+import io
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -134,11 +139,73 @@ def update_delete_department(dept_code):
         return jsonify({'error': 'Database connection error, please retry'}), 500
     return jsonify({'message': 'Department deleted'}), 200
 
+# -- Classroom CRUD --
+@admin_bp.route('/classrooms', methods=['GET', 'POST'])
+@admin_required
+def manage_classrooms():
+    if request.method == 'GET':
+        result = [{
+            'id': c.id,
+            'dept_code': c.dept_code,
+            'class_name': c.class_name,
+            'batch_id': c.batch_id
+        } for c in Classroom.query.all()]
+        return jsonify(result), 200
+
+    # POST → create new classroom
+    data = request.json or {}
+    for field in ('dept_code','class_name'):
+        if field not in data:
+            return jsonify({'error': f'{field} is required'}), 400
+
+    if Classroom.query.filter_by(dept_code=data['dept_code'], class_name=data['class_name']).first():
+        return jsonify({'error': 'Classroom with this name already exists in this department.'}), 400
+
+    if not Department.query.get(data['dept_code']):
+        return jsonify({'error': f"Department '{data['dept_code']}' not found"}), 400
+
+    c = Classroom(
+        dept_code=data['dept_code'],
+        class_name=data['class_name'],
+        batch_id=data.get('batch_id')
+    )
+    db.session.add(c)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'That classroom already exists'}), 400
+    except OperationalError:
+        db.session.rollback()
+        return jsonify({'error': 'Database connection error, please retry'}), 500
+
+    return jsonify({'message': 'Classroom added', 'id': c.id}), 201
+
+
+@admin_bp.route('/classrooms/<int:cls_id>', methods=['PUT', 'DELETE'])
+@admin_required
+def update_delete_classroom(cls_id):
+    c = Classroom.query.get_or_404(cls_id)
+    if request.method == 'PUT':
+        data = request.json or {}
+        if 'class_name' in data:
+            c.class_name = data['class_name']
+        if 'batch_id' in data:
+            c.batch_id = data['batch_id'] if data['batch_id'] else None
+        db.session.commit()
+        return jsonify({'message': 'Classroom updated'}), 200
+
+    db.session.delete(c)
+    db.session.commit()
+    return jsonify({'message': 'Classroom deleted'}), 200
+
+
 # -- Subject CRUD --
 @admin_bp.route('/subjects', methods=['GET', 'POST'])
 @admin_required
 def manage_subjects():
     if request.method == 'GET':
+        subjects = Subject.query.all()
         result = [{
             'id': sub.id,
             'course_code': sub.course_code,
@@ -146,16 +213,14 @@ def manage_subjects():
             'semester': sub.semester_number,
             'subject_code': sub.subject_code,
             'subject_name': sub.subject_name
-        } for sub in Subject.query.all()]
+        } for sub in subjects]
         return jsonify(result), 200
 
-    # POST → create new subject
     data = request.json or {}
     for field in ('course_code','dept_code','semester_number','subject_code','subject_name'):
         if field not in data:
             return jsonify({'error': f'{field} is required'}), 400
 
-    # ensure department exists
     if not Department.query.get(data['dept_code']):
         return jsonify({'error': f"Department '{data['dept_code']}' not found"}), 400
 
@@ -189,121 +254,113 @@ def update_delete_subject(sub_id):
             sub.subject_name = data['subject_name']
         if 'subject_code' in data:
             sub.subject_code = data['subject_code']
-        try:
-            db.session.commit()
-        except OperationalError:
-            db.session.rollback()
-            return jsonify({'error': 'Database connection error, please retry'}), 500
+        db.session.commit()
         return jsonify({'message': 'Subject updated'}), 200
 
-    # DELETE
     db.session.delete(sub)
-    try:
-        db.session.commit()
-    except OperationalError:
-        db.session.rollback()
-        return jsonify({'error': 'Database connection error, please retry'}), 500
+    db.session.commit()
     return jsonify({'message': 'Subject deleted'}), 200
 
-# -- Classroom CRUD --
-@admin_bp.route('/classrooms', methods=['GET', 'POST'])
+# -- Batch and Student Management --
+@admin_bp.route('/batches', methods=['GET', 'POST'])
 @admin_required
-def manage_classrooms():
+def manage_batches():
     if request.method == 'GET':
+        batches = Batch.query.all()
         result = [{
-            'id': c.id,
-            'dept_code': c.dept_code,
-            'class_name': c.class_name
-        } for c in Classroom.query.all()]
-        return jsonify(result), 200
+            'id': b.id,
+            'dept_name': b.dept_name,
+            'class_number': b.class_number,
+            'academic_year': b.academic_year,
+            'semester': b.semester,
+            'student_count': len(b.students)
+        } for b in batches]
+        return jsonify(result)
 
-    # POST → create new classroom
-    data = request.json or {}
-    for field in ('dept_code','class_name'):
-        if field not in data:
-            return jsonify({'error': f'{field} is required'}), 400
+    data = request.form
+    new_batch = Batch(
+        dept_name=data['dept_name'],
+        class_number=data['class_number'],
+        academic_year=data['academic_year'],
+        semester=int(data['semester'])
+    )
+    db.session.add(new_batch)
+    db.session.commit()
 
-    if not Department.query.get(data['dept_code']):
-        return jsonify({'error': f"Department '{data['dept_code']}' not found"}), 400
+    if 'student_csv' in request.files:
+        file = request.files['student_csv']
+        if file.filename != '':
+            stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+            csv_reader = csv.DictReader(stream)
+            for row in csv_reader:
+                student = Student.query.filter_by(enrollment_no=row['enrollment_no']).first()
+                if not student:
+                    student = Student(
+                        roll_no=row['roll_no'],
+                        enrollment_no=row['enrollment_no'],
+                        name=row['name']
+                    )
+                    db.session.add(student)
+                new_batch.students.append(student)
+            db.session.commit()
 
-    c = Classroom(dept_code=data['dept_code'], class_name=data['class_name'])
-    db.session.add(c)
-    try:
-        db.session.commit()
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({'error': 'That classroom already exists'}), 400
-    except OperationalError:
-        db.session.rollback()
-        return jsonify({'error': 'Database connection error, please retry'}), 500
+    return jsonify({'message': 'Batch created', 'id': new_batch.id}), 201
 
-    return jsonify({'message': 'Classroom added', 'id': c.id}), 201
-
-@admin_bp.route('/classrooms/<int:cls_id>', methods=['DELETE'])
+@admin_bp.route('/batches/<int:batch_id>', methods=['GET', 'DELETE'])
 @admin_required
-def delete_classroom(cls_id):
-    c = Classroom.query.get_or_404(cls_id)
-    db.session.delete(c)
-    try:
-        db.session.commit()
-    except OperationalError:
-        db.session.rollback()
-        return jsonify({'error': 'Database connection error, please retry'}), 500
-    return jsonify({'message': 'Classroom deleted'}), 200
+def manage_single_batch(batch_id):
+    batch = Batch.query.get_or_404(batch_id)
+    if request.method == 'GET':
+        return jsonify({
+            'id': batch.id,
+            'dept_name': batch.dept_name,
+            'class_number': batch.class_number,
+            'academic_year': batch.academic_year,
+            'semester': batch.semester,
+            'students': [{'id': s.id, 'name': s.name, 'roll_no': s.roll_no} for s in batch.students]
+        })
+
+    db.session.delete(batch)
+    db.session.commit()
+    return jsonify({'message': 'Batch deleted'})
+
 
 # -- Assignment CRUD --
 @admin_bp.route('/assignments', methods=['GET', 'POST'])
 @admin_required
 def manage_assignments():
     if request.method == 'GET':
+        assignments = Assignment.query.all()
         result = [{
             'id': a.id,
             'staff_id': a.staff_id,
             'subject_id': a.subject_id,
+            'classroom_id': a.classroom_id,
             'lecture_type': a.lecture_type,
             'batch_number': a.batch_number,
-            'classroom_name': a.classroom_name
-        } for a in Assignment.query.all()]
+        } for a in assignments]
         return jsonify(result), 200
 
-    # POST → create new assignment
     data = request.json or {}
-    for field in ('staff_id','subject_id','lecture_type','classroom_name'):
-        if field not in data:
-            return jsonify({'error': f'{field} is required'}), 400
+    required_fields = ['staff_id', 'subject_id', 'classroom_id', 'lecture_type']
+    if not all(field in data for field in required_fields):
+        return jsonify({'error': 'Missing required fields'}), 400
 
-    if not Staff.query.get(data['staff_id']):
-        return jsonify({'error': 'Staff not found'}), 400
-    if not Subject.query.get(data['subject_id']):
-        return jsonify({'error': 'Subject not found'}), 400
-
-    a = Assignment(
-        staff_id       = data['staff_id'],
-        subject_id     = data['subject_id'],
-        lecture_type   = data['lecture_type'],
-        batch_number   = data.get('batch_number'),
-        classroom_name = data['classroom_name']
+    new_assignment = Assignment(
+        staff_id=data['staff_id'],
+        subject_id=data['subject_id'],
+        classroom_id=data['classroom_id'],
+        lecture_type=data['lecture_type'],
+        batch_number=data.get('batch_number')
     )
-    db.session.add(a)
-    try:
-        db.session.commit()
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({'error': 'That assignment already exists'}), 400
-    except OperationalError:
-        db.session.rollback()
-        return jsonify({'error': 'Database connection error, please retry'}), 500
-
-    return jsonify({'message': 'Assignment created', 'id': a.id}), 201
+    db.session.add(new_assignment)
+    db.session.commit()
+    return jsonify({'message': 'Assignment created', 'id': new_assignment.id}), 201
 
 @admin_bp.route('/assignments/<int:assign_id>', methods=['DELETE'])
 @admin_required
 def delete_assignment(assign_id):
     a = Assignment.query.get_or_404(assign_id)
     db.session.delete(a)
-    try:
-        db.session.commit()
-    except OperationalError:
-        db.session.rollback()
-        return jsonify({'error': 'Database connection error, please retry'}), 500
+    db.session.commit()
     return jsonify({'message': 'Assignment deleted'}), 200
