@@ -43,8 +43,6 @@ class Student(db.Model):
     roll_no       = db.Column(db.String, nullable=False)
     enrollment_no = db.Column(db.String, unique=True, nullable=False)
     name          = db.Column(db.String, nullable=False)
-    # The batch_number was incorrect here as a student can be in multiple batches.
-    # The relationship is handled by the `student_batches` table.
     batches       = relationship("Batch", secondary=student_batches, back_populates="students")
 
 class Batch(db.Model):
