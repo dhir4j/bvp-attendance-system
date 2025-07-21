@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookCopy, Home, LogOut, Shield, Users, Group, GraduationCap } from "lucide-react"
+import { BookCopy, Home, LogOut, Shield, Users, Group } from "lucide-react"
 
 import {
   Sidebar,
@@ -28,7 +28,6 @@ export function AppSidebar({ isAdmin }: AppSidebarProps) {
 
   const adminMenuItems = [
       { href: "/dashboard/admin/staff", label: "Staff Mgmt", icon: Users },
-      { href: "/dashboard/admin/students", label: "Student Mgmt", icon: GraduationCap },
       { href: "/dashboard/admin/batches", label: "Batch Mgmt", icon: Group },
       { href: "/dashboard/admin/subjects", label: "Subjects", icon: BookCopy },
       { href: "/dashboard/admin/assignments", label: "Assignments", icon: Home },

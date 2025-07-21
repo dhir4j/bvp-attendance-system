@@ -241,15 +241,30 @@ def delete_assignment(assign_id):
 @admin_required
 def manage_batches():
     if request.method == 'POST':
-        data = request.json
+        # This endpoint now handles form data including a file
+        data = request.form
         required = ['dept_code', 'class_name', 'academic_year', 'semester']
         if not all(k in data for k in required):
-            return jsonify({'error': 'Missing required fields'}), 400
-        new_batch = Batch(**data)
-        db.session.add(new_batch)
-        db.session.commit()
-        return jsonify({'id': new_batch.id, 'message': 'Batch created'}), 201
+            return jsonify({'error': 'Missing required batch details'}), 400
 
+        new_batch = Batch(
+            dept_code=data['dept_code'],
+            class_name=data['class_name'],
+            academic_year=data['academic_year'],
+            semester=data['semester']
+        )
+        db.session.add(new_batch)
+        db.session.commit() # Commit to get the new_batch.id
+
+        # --- Process CSV if included ---
+        if 'file' in request.files:
+            file = request.files['file']
+            if file and file.filename != '' and file.filename.endswith('.csv'):
+                process_student_csv(file, new_batch)
+            
+        return jsonify({'id': new_batch.id, 'message': 'Batch created successfully'}), 201
+
+    # GET request
     batches = Batch.query.all()
     result = [{
         'id': b.id, 'dept_code': b.dept_code, 'class_name': b.class_name,
@@ -257,6 +272,39 @@ def manage_batches():
         'student_count': len(b.students)
     } for b in batches]
     return jsonify(result)
+
+def process_student_csv(file, batch):
+    stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+    csv_input = csv.DictReader(stream)
+    
+    for row in csv_input:
+        enrollment_no = row.get('enrollment_no')
+        if not enrollment_no:
+            continue
+
+        # Find existing student or create a new one
+        student = Student.query.filter_by(enrollment_no=enrollment_no).first()
+        if student:
+            # Update existing student details
+            student.name = row.get('name', student.name)
+            student.roll_no = row.get('roll_no', student.roll_no)
+            student.batch_number = row.get('batch') # Update their practical batch number
+        else:
+            # Create new student
+            student = Student(
+                roll_no=row.get('roll_no'),
+                enrollment_no=enrollment_no,
+                name=row.get('name'),
+                batch_number=row.get('batch')
+            )
+            db.session.add(student)
+        
+        # Add student to the batch if not already in it
+        if student not in batch.students:
+            batch.students.append(student)
+
+    db.session.commit()
+
 
 @admin_bp.route('/batches/<int:batch_id>', methods=['GET', 'PUT', 'DELETE'])
 @admin_required
@@ -276,7 +324,7 @@ def manage_single_batch(batch_id):
         return jsonify({'message': 'Batch deleted'})
     
     # GET
-    students = [{'id': s.id, 'roll_no': s.roll_no, 'name': s.name, 'enrollment_no': s.enrollment_no} for s in batch.students]
+    students = [{'id': s.id, 'roll_no': s.roll_no, 'name': s.name, 'enrollment_no': s.enrollment_no, 'batch_number': s.batch_number} for s in batch.students]
     return jsonify({
         'id': batch.id, 'dept_code': batch.dept_code, 'class_name': batch.class_name,
         'academic_year': batch.academic_year, 'semester': batch.semester,
@@ -310,75 +358,13 @@ def manage_batch_students(batch_id):
         return jsonify({'message': 'Student removed from batch'})
 
 # --- Student Management ---
-@admin_bp.route('/students', methods=['GET', 'POST'])
+# NOTE: This is now largely handled via batch CSV uploads, but keeping for individual edits.
+@admin_bp.route('/students', methods=['GET'])
 @admin_required
-def manage_students():
-    if request.method == 'POST':
-        data = request.json
-        required = ['roll_no', 'enrollment_no', 'name']
-        if not all(k in data for k in required):
-            return jsonify({'error': 'Missing required fields'}), 400
-        
-        if Student.query.filter_by(enrollment_no=data['enrollment_no']).first():
-            return jsonify({'error': 'Enrollment number already exists'}), 400
-            
-        new_student = Student(**data)
-        db.session.add(new_student)
-        db.session.commit()
-        return jsonify({'id': new_student.id, 'message': 'Student created'}), 201
-
+def get_all_students():
     students = Student.query.all()
-    result = [{'id': s.id, 'roll_no': s.roll_no, 'name': s.name, 'enrollment_no': s.enrollment_no} for s in students]
+    result = [{'id': s.id, 'roll_no': s.roll_no, 'name': s.name, 'enrollment_no': s.enrollment_no, 'batch_number': s.batch_number} for s in students]
     return jsonify(result)
-
-@admin_bp.route('/students/upload_csv', methods=['POST'])
-@admin_required
-def upload_students_csv():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-
-    if file and file.filename.endswith('.csv'):
-        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-        csv_input = csv.DictReader(stream)
-        
-        added_count = 0
-        updated_count = 0
-        errors = []
-
-        for row_idx, row in enumerate(csv_input):
-            try:
-                roll_no = row.get('roll_no')
-                enrollment_no = row.get('enrollment_no')
-                name = row.get('name')
-
-                if not all([roll_no, enrollment_no, name]):
-                    errors.append(f"Row {row_idx+1}: Missing required values.")
-                    continue
-
-                student = Student.query.filter_by(enrollment_no=enrollment_no).first()
-                if student:
-                    student.name = name
-                    student.roll_no = roll_no
-                    updated_count += 1
-                else:
-                    student = Student(roll_no=roll_no, enrollment_no=enrollment_no, name=name)
-                    db.session.add(student)
-                    added_count += 1
-            except Exception as e:
-                errors.append(f"Row {row_idx+1}: Error processing row - {str(e)}")
-
-        db.session.commit()
-        return jsonify({
-            'message': 'CSV processed.',
-            'added': added_count,
-            'updated': updated_count,
-            'errors': errors
-        }), 200
-
-    return jsonify({'error': 'Invalid file type, please upload a CSV'}), 400
 
 
 @admin_bp.route('/students/<int:student_id>', methods=['PUT', 'DELETE'])
@@ -390,11 +376,10 @@ def update_delete_student(student_id):
         student.roll_no = data.get('roll_no', student.roll_no)
         student.enrollment_no = data.get('enrollment_no', student.enrollment_no)
         student.name = data.get('name', student.name)
+        student.batch_number = data.get('batch_number', student.batch_number)
         db.session.commit()
         return jsonify({'message': 'Student updated'})
     elif request.method == 'DELETE':
         db.session.delete(student)
         db.session.commit()
         return jsonify({'message': 'Student deleted'})
-
-    

@@ -66,6 +66,9 @@ class Student(db.Model):
     roll_no       = db.Column(db.String, nullable=False)
     enrollment_no = db.Column(db.String, unique=True, nullable=False)
     name          = db.Column(db.String, nullable=False)
+    # This field will store the practical/tutorial batch number (e.g., 1, 2, 3)
+    # It's not a foreign key, just data associated with the student for a given context.
+    batch_number  = db.Column(db.Integer, nullable=True)
     
     # A student can be in multiple batches over time, but usually one active batch per semester
     batches = relationship('Batch', secondary=student_batches, back_populates='students')
@@ -92,6 +95,8 @@ class AttendanceRecord(db.Model):
     attendance_date= db.Column(db.Date, nullable=False)
     absent_rolls   = db.Column(db.JSON, nullable=False) # Store list of absent roll numbers
     lecture_type   = db.Column(db.String, nullable=False)
-    batch_number   = db.Column(db.Integer, nullable=True) # For practicals etc.
+    # This stores the practical/tutorial batch number for which attendance was taken
+    batch_number   = db.Column(db.Integer, nullable=True) 
     
     assignment     = relationship("Assignment")
+    __table_args__ = (db.UniqueConstraint('assignment_id', 'attendance_date', 'batch_number'),)

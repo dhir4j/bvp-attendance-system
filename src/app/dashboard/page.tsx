@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
-import type { StaffAssignmentsResponse } from '@/types';
+import type { SubjectAssignment } from '@/types';
 import {
   Card,
   CardDescription,
@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 
 export default function DashboardPage() {
   const { toast } = useToast();
-  const [assignmentsBySubject, setAssignmentsBySubject] = useState<StaffAssignmentsResponse>({});
+  const [assignments, setAssignments] = useState<SubjectAssignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchAssignments = useCallback(async () => {
@@ -28,12 +28,12 @@ export default function DashboardPage() {
         throw new Error("Failed to fetch your assignments. Please log in again.");
       }
 
-      const assignments: StaffAssignmentsResponse = await res.json();
-      setAssignmentsBySubject(assignments);
+      const data: SubjectAssignment[] = await res.json();
+      setAssignments(data);
 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
-      setAssignmentsBySubject({});
+      setAssignments([]);
     } finally {
       setIsLoading(false);
     }
@@ -75,21 +75,24 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {Object.keys(assignmentsBySubject).length > 0 ? (
-          Object.entries(assignmentsBySubject).map(([subjectId, subjectDetails]) => {
+        {assignments.length > 0 ? (
+          assignments.map((assignmentDetails) => {
             const lectureTypes = new Set<string>();
-            subjectDetails.assignments.forEach(a => {
-                Object.keys(a.lecture_types).forEach(lt => lectureTypes.add(lt))
-            })
+            Object.keys(assignmentDetails.lecture_types).forEach(lt => lectureTypes.add(lt));
+
+            // Create a unique key for the link based on subject and classroom
+            const linkKey = `${assignmentDetails.subject_id}-${assignmentDetails.classroom_id}`;
 
             return (
-              <Link href={`/attendance/${subjectId}`} key={subjectId} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
+              <Link href={`/attendance/${linkKey}`} key={linkKey} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
                 <Card className="hover:border-primary/80 transition-colors h-full flex flex-col hover:shadow-lg">
                   <CardHeader className="flex-grow">
                     <div className="flex flex-col gap-2">
-                       <Badge variant="outline" className="w-fit">{subjectDetails.subject_code}</Badge>
-                       <CardTitle className="text-lg leading-tight">{subjectDetails.subject_name}</CardTitle>
+                       <Badge variant="outline" className="w-fit">{assignmentDetails.subject_code}</Badge>
+                       <CardTitle className="text-lg leading-tight">{assignmentDetails.subject_name}</CardTitle>
                        <CardDescription>
+                          Class: {assignmentDetails.classroom_name}
+                          <br />
                           Types: {Array.from(lectureTypes).join(', ')}
                        </CardDescription>
                     </div>

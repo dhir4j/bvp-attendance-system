@@ -157,7 +157,7 @@ export default function SubjectsPage() {
         return;
     }
     const numValue = parseInt(value, 10);
-    if (!isNaN(numValue) && numValue >= 1 && numValue <= 6) {
+    if (!isNaN(numValue) && numValue >= 1 && numValue <= 8) {
         setFormData({...formData, semester: numValue});
     } else if (value.length > 1) {
       // do nothing to prevent invalid input
@@ -245,7 +245,7 @@ export default function SubjectsPage() {
               <Input id="name" value={formData.subject_name} onChange={(e) => setFormData({...formData, subject_name: e.target.value})} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="code">Subject Abr</Label>
+              <Label htmlFor="code">Subject Code</Label>
               <Input id="code" value={formData.subject_code} onChange={(e) => setFormData({...formData, subject_code: e.target.value})} />
             </div>
              <div className="space-y-2">
@@ -258,7 +258,7 @@ export default function SubjectsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
-              <Input id="semester" type="number" value={formData.semester} onChange={handleSemesterChange} placeholder="1-6" disabled={!!selectedSubject} />
+              <Input id="semester" type="number" value={formData.semester} onChange={handleSemesterChange} placeholder="1-8" disabled={!!selectedSubject} />
             </div>
           </div>
           <DialogFooter>

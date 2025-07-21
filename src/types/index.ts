@@ -32,22 +32,23 @@ export interface Assignment {
 }
 
 // Type for the data returned by /staff/assignments
-// This is now grouped by subject
-export interface SubjectAssignmentDetails {
+// This is now a list of objects, each representing a unique subject-classroom pairing
+export interface SubjectAssignment {
+    subject_id: number;
     subject_code: string;
     subject_name: string;
-    assignments: {
+    classroom_id: number;
+    classroom_name: string;
+    batch_id: number | null;
+    lecture_types: {
+      [key: string]: { // e.g. 'TH', 'PR'
         assignment_id: number;
-        classroom_name: string;
-        lecture_types: {
-            [key: string]: (number | null)[] // e.g. 'TH': [null], 'PR': [1, 2]
-        }
-    }[];
+        batch_number: number | null;
+      }[]
+    }
 }
 
-export type StaffAssignmentsResponse = {
-    [subject_id: string]: SubjectAssignmentDetails
-}
+export type StaffAssignmentsResponse = SubjectAssignment[];
 
 // --- New Types for Student and Batch Management ---
 
@@ -56,6 +57,7 @@ export interface Student {
     roll_no: string;
     enrollment_no: string;
     name: string;
+    batch_number: number | null;
 }
 
 export interface Batch {
@@ -66,4 +68,13 @@ export interface Batch {
     semester: number;
     student_count?: number;
     students?: Student[];
+}
+
+export interface Defaulter {
+  roll_no: string;
+  name: string;
+  batch_number: number | null;
+  lectures_attended: number;
+  lectures_held: number;
+  attendance_percentage: number;
 }

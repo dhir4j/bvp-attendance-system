@@ -1,10 +1,9 @@
-
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle, Users, X } from "lucide-react"
-import type { SubjectAssignmentDetails, Student } from "@/types"
+import type { SubjectAssignment, Student } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
@@ -12,57 +11,68 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { Checkbox } from "../ui/checkbox"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
+import { Checkbox } from "../ui/checkbox"
 
 interface AttendanceSheetProps {
-  subjectId: number;
-  subjectDetails: SubjectAssignmentDetails;
+  assignmentDetails: SubjectAssignment;
 }
 
-export function AttendanceSheet({ subjectId, subjectDetails }: AttendanceSheetProps) {
+export function AttendanceSheet({ assignmentDetails }: AttendanceSheetProps) {
   const router = useRouter()
   const { toast } = useToast()
 
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>("")
   const [selectedLectureType, setSelectedLectureType] = useState<string>("")
-  const [selectedBatchNumber, setSelectedBatchNumber] = useState<string>("")
+  const [selectedBatchAssignment, setSelectedBatchAssignment] = useState<{assignment_id: number, batch_number: number | null} | null>(null);
 
   const [students, setStudents] = useState<Student[]>([])
   const [absentRolls, setAbsentRolls] = useState<Set<string>>(new Set())
 
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isStudentListLoading, setIsStudentListLoading] = useState(false);
 
-  const selectedAssignment = useMemo(() => {
-    return subjectDetails.assignments.find(a => String(a.assignment_id) === selectedAssignmentId)
-  }, [selectedAssignmentId, subjectDetails.assignments])
-
+  // Determine available lecture types (TH, PR, TU)
   const lectureTypes = useMemo(() => {
-    return selectedAssignment ? Object.keys(selectedAssignment.lecture_types) : []
-  }, [selectedAssignment])
+    return Object.keys(assignmentDetails.lecture_types)
+  }, [assignmentDetails.lecture_types])
 
-  const batches = useMemo(() => {
-    return selectedAssignment && selectedLectureType ? selectedAssignment.lecture_types[selectedLectureType] : []
-  }, [selectedAssignment, selectedLectureType])
+  // Determine available batches for the selected lecture type
+  const batchAssignments = useMemo(() => {
+    return selectedLectureType ? assignmentDetails.lecture_types[selectedLectureType] : []
+  }, [selectedLectureType, assignmentDetails.lecture_types])
 
-  const batchId = selectedAssignment?.classroom_name; // This needs to be improved to get batch_id
 
-  // Fetch students when assignment (and thus batch) is selected
+  // Fetch students when a batch is selected
   useEffect(() => {
-    if (selectedAssignment) {
-      const fetchStudents = async () => {
-        // This is a placeholder, need to get the actual batch_id associated with the classroom
-        const temp_batch_id = 1; // You need a way to link classroom to a batch
-        // const res = await fetch(`/api/staff/batches/${temp_batch_id}/students`)
-        // if(res.ok) {
-        //   const data = await res.json();
-        //   setStudents(data);
-        // }
+    const fetchStudents = async () => {
+      if (assignmentDetails.batch_id && selectedBatchAssignment) {
+        setIsStudentListLoading(true);
+        setStudents([]);
+        
+        const batchNum = selectedBatchAssignment.batch_number;
+        let url = `/api/staff/batches/${assignmentDetails.batch_id}/students`;
+        if (batchNum !== null) {
+          url += `?batch_number=${batchNum}`;
+        }
+        
+        try {
+          const res = await fetch(url)
+          if(res.ok) {
+            const data = await res.json();
+            setStudents(data);
+          } else {
+            toast({ variant: "destructive", title: "Error", description: "Could not fetch student list." });
+          }
+        } catch (error: any) {
+           toast({ variant: "destructive", title: "Error", description: error.message });
+        } finally {
+            setIsStudentListLoading(false);
+        }
       }
-      // fetchStudents();
     }
-  }, [selectedAssignment])
+    fetchStudents();
+  }, [assignmentDetails.batch_id, selectedBatchAssignment, toast])
 
 
   const handleToggleAbsent = (roll_no: string) => {
@@ -77,25 +87,28 @@ export function AttendanceSheet({ subjectId, subjectDetails }: AttendanceSheetPr
     });
   };
 
-  
+  const handleSelectAll = (checked: boolean) => {
+      if (checked) {
+          setAbsentRolls(new Set());
+      } else {
+          setAbsentRolls(new Set(students.map(s => s.roll_no)));
+      }
+  }
+
+  const allPresent = absentRolls.size === 0;
+
   const handleSubmit = async () => {
-    if(!selectedAssignmentId || !selectedLectureType) {
-        toast({ variant: "destructive", title: "Error", description: "Please select a classroom and lecture type."});
-        return;
-    }
-    
-    const isBatchRequired = selectedLectureType === 'PR' || selectedLectureType === 'TU';
-    if(isBatchRequired && !selectedBatchNumber) {
-        toast({ variant: "destructive", title: "Error", description: "Please select a batch for this lecture type."});
+    if(!selectedBatchAssignment || !selectedLectureType) {
+        toast({ variant: "destructive", title: "Error", description: "Please select a lecture type and batch/theory."});
         return;
     }
     
     setIsLoading(true);
 
     const body = {
-        assignment_id: parseInt(selectedAssignmentId),
+        assignment_id: selectedBatchAssignment.assignment_id,
         lecture_type: selectedLectureType,
-        batch_number: selectedBatchNumber ? parseInt(selectedBatchNumber) : null,
+        batch_number: selectedBatchAssignment.batch_number,
         absent_rolls: Array.from(absentRolls),
     }
 
@@ -128,32 +141,19 @@ export function AttendanceSheet({ subjectId, subjectDetails }: AttendanceSheetPr
     <>
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-3xl font-bold font-headline">{subjectDetails.subject_name}</h1>
-          <p className="text-muted-foreground">Mark attendance for {subjectDetails.subject_code}.</p>
+          <h1 className="text-3xl font-bold font-headline">{assignmentDetails.subject_name}</h1>
+          <p className="text-muted-foreground">Class: {assignmentDetails.classroom_name} ({assignmentDetails.subject_code})</p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>Session Details</CardTitle>
-            <CardDescription>Select the classroom, lecture type, and batch for this session.</CardDescription>
+            <CardDescription>Select the lecture type and batch for this session.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-6 md:grid-cols-3">
-             <div className="space-y-2">
-                <Label>Classroom</Label>
-                <Select value={selectedAssignmentId} onValueChange={setSelectedAssignmentId}>
-                    <SelectTrigger><SelectValue placeholder="Select classroom" /></SelectTrigger>
-                    <SelectContent>
-                        {subjectDetails.assignments.map((a) => (
-                            <SelectItem key={a.assignment_id} value={String(a.assignment_id)}>
-                            {a.classroom_name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
+          <CardContent className="grid gap-6 md:grid-cols-2">
             <div className="space-y-2">
               <Label>Lecture Type</Label>
-              <Select value={selectedLectureType} onValueChange={setSelectedLectureType} disabled={!selectedAssignmentId}>
+              <Select value={selectedLectureType} onValueChange={v => {setSelectedLectureType(v); setSelectedBatchAssignment(null);}}>
                 <SelectTrigger><SelectValue placeholder="Select lecture type" /></SelectTrigger>
                 <SelectContent>
                   {lectureTypes.map((type) => (
@@ -162,21 +162,26 @@ export function AttendanceSheet({ subjectId, subjectDetails }: AttendanceSheetPr
                 </SelectContent>
               </Select>
             </div>
-            {batches && batches.length > 0 && batches[0] !== null && (
-                 <div className="space-y-2">
-                    <Label>Batch Number</Label>
-                    <Select value={selectedBatchNumber} onValueChange={setSelectedBatchNumber} disabled={!selectedLectureType}>
-                        <SelectTrigger><SelectValue placeholder="Select batch" /></SelectTrigger>
-                        <SelectContent>
-                        {batches.map((batch) => (
-                            <SelectItem key={batch} value={String(batch)}>
-                                Batch {batch}
-                            </SelectItem>
-                        ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            )}
+            <div className="space-y-2">
+                <Label>Batch / Theory</Label>
+                <Select 
+                    value={selectedBatchAssignment ? String(selectedBatchAssignment.assignment_id) : ""} 
+                    onValueChange={val => {
+                        const found = batchAssignments.find(b => String(b.assignment_id) === val);
+                        setSelectedBatchAssignment(found || null);
+                    }}
+                    disabled={!selectedLectureType}
+                >
+                    <SelectTrigger><SelectValue placeholder="Select batch..." /></SelectTrigger>
+                    <SelectContent>
+                    {batchAssignments.map((b) => (
+                        <SelectItem key={b.assignment_id} value={String(b.assignment_id)}>
+                           {b.batch_number ? `Batch ${b.batch_number}` : "Theory (Full Class)"}
+                        </SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+            </div>
           </CardContent>
         </Card>
 
@@ -185,22 +190,51 @@ export function AttendanceSheet({ subjectId, subjectDetails }: AttendanceSheetPr
             <CardTitle>Mark Absentees</CardTitle>
             <CardDescription>
               {students.length > 0 
-                ? "Uncheck the box for any absent students."
-                : "Enter roll numbers of absentees, separated by commas or spaces."
+                ? "Uncheck the box for any absent students. Everyone is marked present by default."
+                : "Select a session to see the student list."
               }
             </CardDescription>
           </CardHeader>
           <CardContent>
-             <div className="flex flex-col gap-2 mb-4">
-                <Label htmlFor="absent-rolls">Absent Roll Numbers</Label>
-                <Textarea
-                    id="absent-rolls"
-                    placeholder="e.g., 2K22/A/01, 2K22/A/05, 2K22/A/12"
-                    value={Array.from(absentRolls).join(", ")}
-                    onChange={(e) => setAbsentRolls(new Set(e.target.value.split(/[\s,]+/).filter(Boolean)))}
-                    rows={5}
-                />
-             </div>
+             {isStudentListLoading ? (
+                <p>Loading students...</p>
+             ) : students.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">
+                        <Checkbox 
+                          checked={allPresent}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Select all students as present/absent"
+                        />
+                      </TableHead>
+                      <TableHead>Roll Number</TableHead>
+                      <TableHead>Name</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {students.map(student => (
+                      <TableRow key={student.id} data-state={absentRolls.has(student.roll_no) ? 'selected' : ''}>
+                        <TableCell>
+                           <Checkbox
+                            checked={!absentRolls.has(student.roll_no)}
+                            onCheckedChange={() => handleToggleAbsent(student.roll_no)}
+                            id={`student-${student.id}`}
+                           />
+                        </TableCell>
+                        <TableCell className="font-medium">{student.roll_no}</TableCell>
+                        <TableCell>{student.name}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+             ) : (
+                <div className="text-center py-10 text-muted-foreground">
+                  <p>No students to display.</p>
+                  <p className="text-sm">Please select a session or check the batch configuration.</p>
+                </div>
+             )}
           </CardContent>
         </Card>
       </div>
@@ -217,7 +251,7 @@ export function AttendanceSheet({ subjectId, subjectDetails }: AttendanceSheetPr
               <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isLoading}>
+            <Button onClick={handleSubmit} disabled={isLoading || !selectedBatchAssignment}>
               {isLoading ? 'Submitting...' : 'Submit Attendance'}
             </Button>
           </div>

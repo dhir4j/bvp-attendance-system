@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { PlusCircle, MoreHorizontal, Edit, Trash2, UserPlus, UserX } from "lucide-react"
+import { PlusCircle, MoreHorizontal, Edit, Trash2, UserPlus, UserX, FileCheck2 } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -36,9 +36,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import type { Batch, Student } from "@/types"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 const initialFormData: Omit<Batch, 'id'> = {
     dept_code: "",
@@ -50,27 +48,23 @@ const initialFormData: Omit<Batch, 'id'> = {
 export default function BatchesPage() {
   const { toast } = useToast()
   const [batches, setBatches] = useState<Batch[]>([])
-  const [students, setStudents] = useState<Student[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null)
   const [formData, setFormData] = useState(initialFormData)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [isUploading, setIsUploading] = useState(false);
 
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
-  const [selectedStudentId, setSelectedStudentId] = useState("");
-
+  const [studentsInBatch, setStudentsInBatch] = useState<Student[]>([]);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [batchesRes, studentsRes] = await Promise.all([
-        fetch("/api/admin/batches"),
-        fetch("/api/admin/students")
-      ]);
-      if (!batchesRes.ok || !studentsRes.ok) throw new Error("Failed to fetch data")
-      setBatches(await batchesRes.json());
-      setStudents(await studentsRes.json());
+      const res = await fetch("/api/admin/batches");
+      if (!res.ok) throw new Error("Failed to fetch batches")
+      setBatches(await res.json());
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message })
     } finally {
@@ -100,49 +94,80 @@ export default function BatchesPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false)
     setSelectedBatch(null)
+    setSelectedFile(null)
   }
 
-  const handleOpenStudentModal = (batch: Batch) => {
+  const handleOpenStudentModal = async (batch: Batch) => {
     setSelectedBatch(batch);
+    setIsLoading(true);
     setIsStudentModalOpen(true);
+    try {
+      const res = await fetch(`/api/admin/batches/${batch.id}`);
+      if (!res.ok) throw new Error("Failed to fetch student details");
+      const data = await res.json();
+      setStudentsInBatch(data.students);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+      handleCloseStudentModal();
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   const handleCloseStudentModal = () => {
     setIsStudentModalOpen(false);
     setSelectedBatch(null);
-    setSelectedStudentId("");
+    setStudentsInBatch([]);
   }
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setSelectedFile(event.target.files[0]);
+    }
+  };
 
   const handleSaveBatch = async () => {
-    const url = selectedBatch ? `/api/admin/batches/${selectedBatch.id}` : "/api/admin/batches";
-    const method = selectedBatch ? "PUT" : "POST";
+    const url = "/api/admin/batches";
+    const method = "POST";
     
     if (!formData.dept_code || !formData.class_name || !formData.academic_year || !formData.semester) {
-        toast({variant: "destructive", title: "Error", description: "All fields are required."})
+        toast({variant: "destructive", title: "Error", description: "All batch details are required."})
         return
     }
 
+    if (!selectedFile) {
+      toast({variant: "destructive", title: "Error", description: "A student CSV file is required to create a batch."})
+      return
+    }
+
+    setIsUploading(true);
+    const postData = new FormData();
+    postData.append('dept_code', formData.dept_code);
+    postData.append('class_name', formData.class_name);
+    postData.append('academic_year', formData.academic_year);
+    postData.append('semester', String(formData.semester));
+    if (selectedFile) {
+        postData.append('file', selectedFile);
+    }
+
     try {
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, semester: Number(formData.semester) }),
-      })
+      const res = await fetch(url, { method, body: postData });
       if (!res.ok) {
         const errorData = await res.json()
-        throw new Error(errorData.error || `Failed to ${selectedBatch ? 'update' : 'add'} batch`)
+        throw new Error(errorData.error || `Failed to add batch`)
       }
-      toast({ title: "Success", description: `Batch ${selectedBatch ? 'updated' : 'added'}.` })
+      toast({ title: "Success", description: `Batch created and students imported.` })
       fetchData()
       handleCloseModal()
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message })
+    } finally {
+      setIsUploading(false);
     }
   }
 
   const handleDeleteBatch = async (batchId: number) => {
-    if (!confirm("Are you sure you want to delete this batch?")) return;
+    if (!confirm("Are you sure you want to delete this batch? This will also unenroll all associated students.")) return;
     try {
         const res = await fetch(`/api/admin/batches/${batchId}`, { method: "DELETE" });
         if(!res.ok) {
@@ -156,63 +181,18 @@ export default function BatchesPage() {
     }
   }
 
-  const handleAddStudentToBatch = async () => {
-    if (!selectedBatch || !selectedStudentId) {
-        toast({variant: "destructive", title: "Error", description: "Batch or student not selected."});
-        return;
-    }
-    try {
-        const res = await fetch(`/api/admin/batches/${selectedBatch.id}/students`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ student_id: Number(selectedStudentId) })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to add student");
-
-        toast({ title: "Success", description: "Student added to batch." });
-        fetchData(); // Refresh all data
-        const updatedBatchRes = await fetch(`/api/admin/batches/${selectedBatch.id}`);
-        setSelectedBatch(await updatedBatchRes.json());
-        setSelectedStudentId("");
-    } catch (error: any) {
-        toast({ variant: "destructive", title: "Error", description: error.message });
-    }
-  }
-
-  const handleRemoveStudentFromBatch = async (studentId: number) => {
-    if (!selectedBatch) return;
-     try {
-        const res = await fetch(`/api/admin/batches/${selectedBatch.id}/students`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ student_id: studentId })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to remove student");
-
-        toast({ title: "Success", description: "Student removed from batch." });
-        fetchData();
-        setSelectedBatch(prev => prev ? ({...prev, students: prev.students?.filter(s => s.id !== studentId)}) : null);
-    } catch (error: any) {
-        toast({ variant: "destructive", title: "Error", description: error.message });
-    }
-  }
-
-  const availableStudents = students.filter(s => !selectedBatch?.students?.some(bs => bs.id === s.id));
-
   return (
     <>
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <CardTitle>Batch Management</CardTitle>
-              <CardDescription>Create academic batches and manage student enrollments.</CardDescription>
+              <CardTitle>Batch & Student Management</CardTitle>
+              <CardDescription>Create academic batches and enroll students via CSV upload.</CardDescription>
             </div>
             <Button onClick={() => handleOpenModal()} className="w-full sm:w-auto">
               <PlusCircle className="mr-2 h-4 w-4" />
-              Create Batch
+              Create Batch & Import Students
             </Button>
           </div>
         </CardHeader>
@@ -248,8 +228,8 @@ export default function BatchesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleOpenStudentModal(b)}><UserPlus className="mr-2 h-4 w-4"/>Manage Students</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenModal(b)}><Edit className="mr-2 h-4 w-4" />Edit Batch</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenStudentModal(b)}><UserPlus className="mr-2 h-4 w-4"/>View Students</DropdownMenuItem>
+                          {/* <DropdownMenuItem onClick={() => handleOpenModal(b)}><Edit className="mr-2 h-4 w-4" />Edit Batch</DropdownMenuItem> */}
                           <DropdownMenuItem onClick={() => handleDeleteBatch(b.id)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />Delete Batch</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -268,7 +248,10 @@ export default function BatchesPage() {
       <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{selectedBatch ? "Edit Batch" : "Create New Batch"}</DialogTitle>
+            <DialogTitle>Create New Batch & Import Students</DialogTitle>
+            <DialogDescription>
+              Enter batch details and upload a student CSV with columns: `batch`, `roll_no`, `enrollment_no`, `name`.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
@@ -287,71 +270,63 @@ export default function BatchesPage() {
               <Label htmlFor="semester">Semester</Label>
               <Input id="semester" type="number" value={formData.semester} onChange={(e) => setFormData({...formData, semester: parseInt(e.target.value) || 0})} placeholder="e.g. 3"/>
             </div>
+             <div className="space-y-2">
+                <Label htmlFor="csv-file">Student CSV File</Label>
+                <Input id="csv-file" type="file" accept=".csv" onChange={handleFileChange} />
+             </div>
+             {selectedFile && (
+                <Alert>
+                  <FileCheck2 className="h-4 w-4" />
+                  <AlertTitle>File Selected</AlertTitle>
+                  <AlertDescription>
+                    {selectedFile.name}
+                  </AlertDescription>
+                </Alert>
+             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={handleCloseModal}>Cancel</Button>
-            <Button onClick={handleSaveBatch}>Save</Button>
+            <Button onClick={handleSaveBatch} disabled={isUploading}>
+              {isUploading ? "Processing..." : "Create and Import"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       
-      {/* Manage Students Modal */}
+      {/* View Students Modal */}
       <Dialog open={isStudentModalOpen} onOpenChange={handleCloseStudentModal}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Manage Students for {selectedBatch?.class_name}</DialogTitle>
-            <DialogDescription>Add or remove students from this batch.</DialogDescription>
+            <DialogTitle>Students in {selectedBatch?.class_name}</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-              {/* Add Student Section */}
-              <div className="space-y-4">
-                  <h3 className="font-semibold">Add Student</h3>
-                  <div className="space-y-2">
-                      <Label htmlFor="student-select">Available Students</Label>
-                      <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-                          <SelectTrigger id="student-select">
-                              <SelectValue placeholder="Select a student to add" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              <ScrollArea className="h-[200px]">
-                                {availableStudents.length > 0 ? availableStudents.map(s => (
-                                    <SelectItem key={s.id} value={String(s.id)}>
-                                        {s.name} ({s.roll_no})
-                                    </SelectItem>
-                                )) : <div className="p-4 text-sm text-muted-foreground">No students to add.</div>}
-                              </ScrollArea>
-                          </SelectContent>
-                      </Select>
-                  </div>
-                  <Button onClick={handleAddStudentToBatch} disabled={!selectedStudentId} className="w-full">
-                      <UserPlus className="mr-2 h-4 w-4" /> Add to Batch
-                  </Button>
-              </div>
-              {/* Enrolled Students Section */}
-              <div className="space-y-4">
-                  <h3 className="font-semibold">Enrolled Students</h3>
-                  <ScrollArea className="h-[250px] border rounded-md">
-                      <div className="p-4">
-                        {selectedBatch?.students && selectedBatch.students.length > 0 ? (
-                             <ul className="space-y-2">
-                                {selectedBatch.students.map(s => (
-                                    <li key={s.id} className="flex items-center justify-between text-sm">
-                                        <span>{s.name} <span className="text-muted-foreground">({s.roll_no})</span></span>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveStudentFromBatch(s.id)}>
-                                            <UserX className="h-4 w-4"/>
-                                        </Button>
-                                    </li>
-                                ))}
-                             </ul>
-                        ) : (
-                            <p className="text-sm text-muted-foreground text-center pt-10">No students in this batch.</p>
-                        )}
-                      </div>
-                  </ScrollArea>
-              </div>
+          <div className="py-4">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Roll No</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Enrollment No</TableHead>
+                        <TableHead>Batch</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {isLoading ? (
+                        <TableRow><TableCell colSpan={4} className="text-center">Loading students...</TableCell></TableRow>
+                    ) : studentsInBatch.length > 0 ? studentsInBatch.map(s => (
+                        <TableRow key={s.id}>
+                            <TableCell>{s.roll_no}</TableCell>
+                            <TableCell>{s.name}</TableCell>
+                            <TableCell>{s.enrollment_no}</TableCell>
+                            <TableCell>{s.batch_number || 'N/A'}</TableCell>
+                        </TableRow>
+                    )) : (
+                         <TableRow><TableCell colSpan={4} className="text-center">No students found in this batch.</TableCell></TableRow>
+                    )}
+                </TableBody>
+            </Table>
           </div>
           <DialogFooter>
-             <Button variant="outline" onClick={handleCloseStudentModal}>Done</Button>
+             <Button variant="outline" onClick={handleCloseStudentModal}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

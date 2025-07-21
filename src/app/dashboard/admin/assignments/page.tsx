@@ -68,7 +68,8 @@ export default function AssignmentsPage() {
             fetch('/api/admin/classrooms')
         ]);
         if(!assignmentsRes.ok || !staffRes.ok || !subjectsRes.ok || !classroomsRes.ok) {
-            throw new Error("Failed to fetch initial data. Make sure all dependencies like Classrooms are created.");
+            const errorData = await assignmentsRes.json();
+            throw new Error(errorData.error || "Failed to fetch initial data. Make sure all dependencies are created first.");
         }
         setAssignments(await assignmentsRes.json());
         setStaff(await staffRes.json());
@@ -150,8 +151,8 @@ export default function AssignmentsPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <CardTitle>Staff-Subject Assignments</CardTitle>
-              <CardDescription>Assign staff members to subjects, lectures, and classrooms.</CardDescription>
+              <CardTitle>Professor-Subject Assignments</CardTitle>
+              <CardDescription>Assign professors to subjects, lectures, and classrooms.</CardDescription>
             </div>
              <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                 <DialogTrigger asChild>
@@ -163,14 +164,14 @@ export default function AssignmentsPage() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Create New Assignment</DialogTitle>
-                        <DialogDescription>Select a staff, subject, type, and classroom to assign.</DialogDescription>
+                        <DialogDescription>Select a professor, subject, type, and classroom to assign.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="space-y-2">
-                            <Label htmlFor="staff">Staff</Label>
+                            <Label htmlFor="staff">Professor</Label>
                             <Select onValueChange={(value) => setNewAssignment({...newAssignment, staff_id: value})}>
                                 <SelectTrigger id="staff">
-                                    <SelectValue placeholder="Select Staff" />
+                                    <SelectValue placeholder="Select Professor" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {staff.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.full_name}</SelectItem>)}
@@ -232,7 +233,7 @@ export default function AssignmentsPage() {
             <Table>
                 <TableHeader>
                 <TableRow>
-                    <TableHead>Staff Member</TableHead>
+                    <TableHead>Professor</TableHead>
                     <TableHead>Assigned Subject</TableHead>
                     <TableHead>Classroom</TableHead>
                     <TableHead>Type</TableHead>

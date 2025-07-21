@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Users, Book, Link2, Home, Group, User, GraduationCap } from "lucide-react"
+import { Users, Book, Link2, Home, Group } from "lucide-react"
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -13,7 +13,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (pathname.startsWith("/dashboard/admin/subjects")) return "subjects"
     if (pathname.startsWith("/dashboard/admin/assignments")) return "assignments"
     if (pathname.startsWith("/dashboard/admin/classrooms")) return "classrooms"
-    if (pathname.startsWith("/dashboard/admin/students")) return "students"
     if (pathname.startsWith("/dashboard/admin/batches")) return "batches"
     return "staff"
   }
@@ -30,9 +29,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 h-auto sm:h-10 flex-wrap">
           <TabsTrigger value="staff" asChild>
             <Link href="/dashboard/admin/staff"><Users className="mr-2 h-4 w-4" />Staff</Link>
-          </TabsTrigger>
-          <TabsTrigger value="students" asChild>
-            <Link href="/dashboard/admin/students"><GraduationCap className="mr-2 h-4 w-4" />Students</Link>
           </TabsTrigger>
           <TabsTrigger value="batches" asChild>
             <Link href="/dashboard/admin/batches"><Group className="mr-2 h-4 w-4" />Batches</Link>
