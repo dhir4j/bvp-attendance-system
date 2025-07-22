@@ -3,11 +3,11 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { AlertCircle, CheckCircle, Users, X, Loader2 } from "lucide-react"
+import { AlertCircle, CheckCircle, Users, X, Loader2, ArrowLeft } from "lucide-react"
 
 import type { StaffAssignmentDetails, Student } from "@/types"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -119,93 +119,81 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
   return (
     <>
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-3xl font-bold font-headline">{assignment.subject_name} ({assignment.subject_code})</h1>
-          <p className="text-muted-foreground">Marking attendance for {assignment.batch_name}.</p>
+        <div className="flex items-center gap-4">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => router.back()}>
+                <ArrowLeft className="h-4 w-4" />
+                <span className="sr-only">Back</span>
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold font-headline">{assignment.subject_name} ({assignment.subject_code})</h1>
+              <p className="text-muted-foreground">Marking attendance for {assignment.batch_name}.</p>
+            </div>
         </div>
 
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle>
-                <span className="text-primary mr-2">1.</span>
-                Session Details
-            </CardTitle>
-            <CardDescription>Select the lecture type and sub-batch (if applicable).</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Lecture Type</Label>
-              <Select value={lectureType} onValueChange={setLectureType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select lecture type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {lectureTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type === 'TH' ? 'Theory' : type === 'PR' ? 'Practical' : 'Tutorial'} ({type})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {showBatchSelector && (
-                 <div className="space-y-2">
-                    <Label>Sub-Batch Number</Label>
-                    <Select value={batchNumber} onValueChange={setBatchNumber}>
-                        <SelectTrigger disabled={!lectureType}>
-                            <SelectValue placeholder="Select sub-batch" />
+        <Card className="shadow-lg animate-slide-up">
+            <CardHeader>
+                <CardTitle>Mark Attendance</CardTitle>
+                <CardDescription>Select the session details and enter the roll numbers for all absent students.</CardDescription>
+            </CardHeader>
+          <CardContent className="space-y-8">
+            <div className="space-y-4">
+                <Label className="text-base font-medium">Session Details</Label>
+                <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                    <Label htmlFor="lecture-type">Lecture Type</Label>
+                    <Select value={lectureType} onValueChange={setLectureType}>
+                        <SelectTrigger id="lecture-type">
+                        <SelectValue placeholder="Select lecture type" />
                         </SelectTrigger>
                         <SelectContent>
-                        {batchesForType.map((batch) => (
-                           batch && <SelectItem key={batch} value={String(batch)}>
-                            Batch {batch}
+                        {lectureTypes.map((type) => (
+                            <SelectItem key={type} value={type}>
+                            {type === 'TH' ? 'Theory' : type === 'PR' ? 'Practical' : 'Tutorial'} ({type})
                             </SelectItem>
                         ))}
                         </SelectContent>
                     </Select>
+                    </div>
+                    {showBatchSelector && (
+                        <div className="space-y-2">
+                            <Label htmlFor="sub-batch">Sub-Batch Number</Label>
+                            <Select value={batchNumber} onValueChange={setBatchNumber}>
+                                <SelectTrigger id="sub-batch" disabled={!lectureType}>
+                                    <SelectValue placeholder="Select sub-batch" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                {batchesForType.map((batch) => (
+                                batch && <SelectItem key={batch} value={String(batch)}>
+                                    Batch {batch}
+                                    </SelectItem>
+                                ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                 </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg">
-          <CardHeader>
-             <CardTitle>
-                <span className="text-primary mr-2">2.</span>
-                Mark Absentees
-            </CardTitle>
-            <CardDescription>Enter the roll numbers of all absent students, separated by commas or spaces.</CardDescription>
-          </CardHeader>
-          <CardContent>
-             <div className="flex flex-col gap-2 mb-4">
-                <Label htmlFor="absent-rolls">Absent Roll Numbers</Label>
+            </div>
+            
+            <div className="space-y-4">
+                <Label htmlFor="absent-rolls" className="text-base font-medium">Absent Students</Label>
                 <Textarea
                     id="absent-rolls"
-                    placeholder="e.g., 2K22/A/01, 2K22/A/05, 2K22/A/12"
+                    placeholder="Enter roll numbers separated by commas, spaces, or new lines..."
                     value={absentRolls}
                     onChange={(e) => setAbsentRolls(e.target.value)}
-                    rows={5}
+                    rows={8}
+                    className="text-base"
                 />
-             </div>
-          </CardContent>
-        </Card>
-      </div>
+            </div>
 
-      <div className="sticky bottom-0 left-0 right-0 mt-6 bg-card/80 backdrop-blur-sm border-t p-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div>
-            <Button variant="outline" onClick={() => router.back()}>
-              <X className="h-4 w-4 mr-2" />
-              Cancel
-            </Button>
-          </div>
-          <div className="flex gap-4">
-            <Button onClick={handleReview} disabled={isReviewing || !lectureType || (showBatchSelector && !batchNumber)}>
-              {isReviewing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Review Absentees
-            </Button>
-          </div>
-        </div>
+          </CardContent>
+            <CardFooter className="flex justify-end">
+                 <Button size="lg" onClick={handleReview} disabled={isReviewing || !lectureType || (showBatchSelector && !batchNumber)}>
+                    {isReviewing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Review and Submit
+                </Button>
+            </CardFooter>
+        </Card>
       </div>
 
       {/* Confirmation Dialog */}
