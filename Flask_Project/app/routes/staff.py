@@ -167,29 +167,29 @@ def mark_attendance():
         ).first()
 
         if existing_record:
+            # Logic for a student who already has an attendance record today
             if status == 'present':
-                # If they were absent, mark present and set count to 1.
-                # If they were already present, increment their count.
+                # If they were marked absent before, now they are present
                 if existing_record.status == 'absent':
                     existing_record.status = 'present'
-                    existing_record.lecture_count = 1
-                else: # was present
-                    existing_record.lecture_count += 1
+                # Increment attended lecture count because they are present for this lecture
+                existing_record.lecture_count += 1
             else: # status is 'absent'
-                # If they were previously present, mark as absent.
-                # The attended lecture count remains from the earlier lecture.
+                # If they were present before, now they are absent for this lecture.
+                # Just update the status. DO NOT change the lecture_count, as that
+                # tracks their previously attended lectures for the day.
                 if existing_record.status == 'present':
                     existing_record.status = 'absent'
-                # If they were already absent, do nothing.
+                # If they were already absent, nothing changes.
             
         else:
-            # Create a new record if one doesn't exist
+            # Create a new record if one doesn't exist for the student today
             record = AttendanceRecord(
                 assignment_id=assignment.id,
                 student_id=student.id,
                 date=today,
                 status=status,
-                # if present, starts with 1 lecture, if absent, it's 0 as they missed it.
+                # If present for this first lecture, count is 1. If absent, it's 0.
                 lecture_count=1 if status == 'present' else 0
             )
             db.session.add(record)
@@ -270,8 +270,7 @@ def get_staff_attendance_report():
 
             attended_lectures = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
                 AttendanceRecord.assignment_id.in_(assignment_ids),
-                AttendanceRecord.student_id == student.id,
-                AttendanceRecord.status == 'present'
+                AttendanceRecord.student_id == student.id
             ).scalar() or 0
 
         percentage = (attended_lectures / total_lectures * 100) if total_lectures > 0 else 0
@@ -330,4 +329,6 @@ def get_roster(batch_id):
 
 
     
+    
+
     
