@@ -42,8 +42,8 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm shadow-2xl">
+    <main className="flex min-h-screen w-full items-center justify-center bg-background p-4 animate-fade-in">
+      <Card className="w-full max-w-sm shadow-2xl animate-slide-up">
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-headline">BVP Staff Login</CardTitle>
           <CardDescription>Please log in to manage attendance</CardDescription>

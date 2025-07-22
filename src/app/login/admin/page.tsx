@@ -42,8 +42,8 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm shadow-2xl">
+    <main className="flex min-h-screen w-full items-center justify-center bg-background p-4 animate-fade-in">
+      <Card className="w-full max-w-sm shadow-2xl animate-slide-up">
         <CardHeader className="text-center">
           <UserCog className="mx-auto h-12 w-12 text-primary mb-2" />
           <CardTitle className="text-3xl font-headline">Admin Login</CardTitle>
