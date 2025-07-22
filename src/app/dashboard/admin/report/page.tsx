@@ -25,26 +25,26 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import type { Classroom, AttendanceReport } from "@/types"
+import type { Batch, AttendanceReport } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { FileBarChart } from "lucide-react"
 
 export default function ReportPage() {
   const { toast } = useToast()
-  const [classrooms, setClassrooms] = useState<Classroom[]>([])
-  const [selectedClassroomId, setSelectedClassroomId] = useState<string>("")
+  const [batches, setBatches] = useState<Batch[]>([])
+  const [selectedBatchId, setSelectedBatchId] = useState<string>("")
   const [reportData, setReportData] = useState<AttendanceReport[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isReportLoading, setIsReportLoading] = useState(false)
 
-  const fetchClassrooms = useCallback(async () => {
+  const fetchBatches = useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await fetch('/api/admin/classrooms')
-      if (!res.ok) throw new Error("Failed to fetch classrooms")
+      const res = await fetch('/api/admin/batches')
+      if (!res.ok) throw new Error("Failed to fetch batches")
       const data = await res.json()
-      setClassrooms(data)
+      setBatches(data)
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message })
     } finally {
@@ -53,15 +53,15 @@ export default function ReportPage() {
   }, [toast])
 
   useEffect(() => {
-    fetchClassrooms()
-  }, [fetchClassrooms])
+    fetchBatches()
+  }, [fetchBatches])
 
-  const fetchReport = useCallback(async (classroomId: string) => {
-    if (!classroomId) return
+  const fetchReport = useCallback(async (batchId: string) => {
+    if (!batchId) return
     setIsReportLoading(true)
     setReportData([])
     try {
-      const res = await fetch(`/api/admin/attendance-report?classroom_id=${classroomId}`)
+      const res = await fetch(`/api/admin/attendance-report?batch_id=${batchId}`)
       const data = await res.json()
       if (!res.ok) {
         throw new Error(data.error || "Failed to fetch attendance report")
@@ -74,35 +74,35 @@ export default function ReportPage() {
     }
   }, [toast])
 
-  const handleClassroomChange = (classroomId: string) => {
-    setSelectedClassroomId(classroomId)
-    fetchReport(classroomId)
+  const handleBatchChange = (batchId: string) => {
+    setSelectedBatchId(batchId)
+    fetchReport(batchId)
   }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Attendance Report</CardTitle>
-        <CardDescription>View classroom-wise attendance percentages for all students.</CardDescription>
+        <CardDescription>View batch-wise attendance percentages for all students.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="max-w-sm mb-6">
-          <Label htmlFor="classroom">Select Classroom</Label>
-          <Select onValueChange={handleClassroomChange} value={selectedClassroomId} disabled={isLoading}>
-            <SelectTrigger id="classroom">
-              <SelectValue placeholder="Select a classroom..." />
+          <Label htmlFor="batch">Select Batch</Label>
+          <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}>
+            <SelectTrigger id="batch">
+              <SelectValue placeholder="Select a batch..." />
             </SelectTrigger>
             <SelectContent>
-              {classrooms.map((c) => (
-                <SelectItem key={c.id} value={String(c.id)}>
-                  {c.class_name} ({c.batch_info})
+              {batches.map((b) => (
+                <SelectItem key={b.id} value={String(b.id)}>
+                   {b.dept_name} {b.class_number} ({b.academic_year} Sem {b.semester})
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        {selectedClassroomId && (
+        {selectedBatchId && (
             <div className="overflow-x-auto">
             <Table>
                 <TableHeader>
@@ -131,7 +131,7 @@ export default function ReportPage() {
                 ))
                 ) : (
                     <TableRow>
-                        <TableCell colSpan={5} className="text-center h-24">No attendance data found for this classroom.</TableCell>
+                        <TableCell colSpan={5} className="text-center h-24">No attendance data found for this batch.</TableCell>
                     </TableRow>
                 )}
                 </TableBody>
@@ -139,11 +139,11 @@ export default function ReportPage() {
             </div>
         )}
 
-        {!selectedClassroomId && !isLoading && (
+        {!selectedBatchId && !isLoading && (
             <Alert>
                 <FileBarChart className="h-4 w-4" />
                 <AlertDescription>
-                    Please select a classroom to view its attendance report.
+                    Please select a batch to view its attendance report.
                 </AlertDescription>
             </Alert>
         )}

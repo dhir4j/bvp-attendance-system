@@ -37,22 +37,14 @@ export interface Student {
   batch_number: number | null;
 }
 
-export interface Classroom {
-  id: number;
-  dept_code: string;
-  class_name: string;
-  batch_id: number | null;
-  batch_info: string;
-}
-
 export interface Assignment {
   id: number;
   staff_id: number;
   staff_name: string;
   subject_id: number;
   subject_name: string;
-  classroom_id: number;
-  classroom_name: string;
+  batch_id: number;
+  batch_name: string;
   lecture_type: 'TH' | 'PR' | 'TU';
   batch_number: number | null;
 }
@@ -61,8 +53,8 @@ export interface StaffAssignmentDetails {
   subject_id: number;
   subject_name: string;
   subject_code: string;
-  classroom_id: number;
-  classroom_name: string;
+  batch_id: number;
+  batch_name: string;
   lecture_types: {
     [key: string]: (number | null)[];
   };

@@ -56,21 +56,12 @@ class Batch(db.Model):
     students      = relationship("Student", secondary=student_batches, back_populates="batches")
     __table_args__ = (db.UniqueConstraint('dept_name', 'class_number', 'academic_year', 'semester'),)
 
-class Classroom(db.Model):
-    __tablename__ = 'classrooms'
-    id         = db.Column(db.Integer, primary_key=True)
-    dept_code  = db.Column(db.String, db.ForeignKey('departments.dept_code'), nullable=False)
-    class_name = db.Column(db.String, nullable=False)
-    batch_id   = db.Column(db.Integer, db.ForeignKey('batches.id'), nullable=True)
-    batch      = relationship("Batch")
-    __table_args__ = (db.UniqueConstraint('dept_code','class_name'),)
-
 class Assignment(db.Model):
     __tablename__ = 'staff_subject_assignment'
     id             = db.Column(db.Integer, primary_key=True)
     staff_id       = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=False)
     subject_id     = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
-    classroom_id   = db.Column(db.Integer, db.ForeignKey('classrooms.id'), nullable=False)
+    batch_id       = db.Column(db.Integer, db.ForeignKey('batches.id'), nullable=False)
     lecture_type   = db.Column(db.String, nullable=False) # TH, PR, TU
     batch_number   = db.Column(db.Integer, nullable=True) # For PR/TU batches (1, 2, 3)
 

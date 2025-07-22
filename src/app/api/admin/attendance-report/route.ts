@@ -6,13 +6,13 @@ import { getFlaskBackend } from '@/lib/utils';
 export async function GET(request: NextRequest) {
   const cookie = request.headers.get('cookie');
   const { searchParams } = new URL(request.url);
-  const classroomId = searchParams.get('classroom_id');
+  const batchId = searchParams.get('batch_id');
 
-  if (!classroomId) {
-    return NextResponse.json({ error: 'classroom_id is required' }, { status: 400 });
+  if (!batchId) {
+    return NextResponse.json({ error: 'batch_id is required' }, { status: 400 });
   }
 
-  const res = await fetch(`${getFlaskBackend()}/admin/attendance-report?classroom_id=${classroomId}`, {
+  const res = await fetch(`${getFlaskBackend()}/admin/attendance-report?batch_id=${batchId}`, {
     headers: {
       'Content-Type': 'application/json',
       ...(cookie && { cookie }),

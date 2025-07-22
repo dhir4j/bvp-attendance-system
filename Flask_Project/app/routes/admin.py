@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, session
 from sqlalchemy.exc import IntegrityError, OperationalError
 from ..models import (
-    Staff, Subject, Classroom, Assignment, Department,
+    Staff, Subject, Assignment, Department,
     Batch, Student, student_batches
 )
 from .. import db, bcrypt
@@ -138,75 +138,6 @@ def update_delete_department(dept_code):
         db.session.rollback()
         return jsonify({'error': 'Database connection error, please retry'}), 500
     return jsonify({'message': 'Department deleted'}), 200
-
-# -- Classroom CRUD --
-@admin_bp.route('/classrooms', methods=['GET', 'POST'])
-@admin_required
-def manage_classrooms():
-    if request.method == 'GET':
-        classrooms = Classroom.query.order_by(Classroom.class_name).all()
-        result = []
-        for c in classrooms:
-            batch_info = "N/A"
-            if c.batch:
-                batch_info = f"{c.batch.dept_name} ({c.batch.academic_year}) Sem {c.batch.semester}"
-            
-            result.append({
-                'id': c.id,
-                'dept_code': c.dept_code,
-                'class_name': c.class_name,
-                'batch_id': c.batch_id,
-                'batch_info': batch_info
-            })
-        return jsonify(result), 200
-
-    # POST → create new classroom
-    data = request.json or {}
-    for field in ('dept_code','class_name'):
-        if field not in data:
-            return jsonify({'error': f'{field} is required'}), 400
-
-    if Classroom.query.filter_by(dept_code=data['dept_code'], class_name=data['class_name']).first():
-        return jsonify({'error': 'Classroom with this name already exists in this department.'}), 400
-
-    if not Department.query.get(data['dept_code']):
-        return jsonify({'error': f"Department '{data['dept_code']}' not found"}), 400
-
-    c = Classroom(
-        dept_code=data['dept_code'],
-        class_name=data['class_name'],
-        batch_id=data.get('batch_id')
-    )
-    db.session.add(c)
-    try:
-        db.session.commit()
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({'error': 'That classroom already exists'}), 400
-    except OperationalError:
-        db.session.rollback()
-        return jsonify({'error': 'Database connection error, please retry'}), 500
-
-    return jsonify({'message': 'Classroom added', 'id': c.id}), 201
-
-
-@admin_bp.route('/classrooms/<int:cls_id>', methods=['PUT', 'DELETE'])
-@admin_required
-def update_delete_classroom(cls_id):
-    c = Classroom.query.get_or_404(cls_id)
-    if request.method == 'PUT':
-        data = request.json or {}
-        if 'class_name' in data:
-            c.class_name = data['class_name']
-        if 'batch_id' in data:
-            c.batch_id = data['batch_id'] if data['batch_id'] else None
-        db.session.commit()
-        return jsonify({'message': 'Classroom updated'}), 200
-
-    db.session.delete(c)
-    db.session.commit()
-    return jsonify({'message': 'Classroom deleted'}), 200
-
 
 # -- Subject CRUD --
 @admin_bp.route('/subjects', methods=['GET', 'POST'])
@@ -367,35 +298,37 @@ def manage_single_batch(batch_id):
 def manage_assignments():
     if request.method == 'GET':
         assignments = db.session.query(
-            Assignment, Staff.full_name, Subject.subject_name, Subject.subject_code, Classroom.class_name
+            Assignment, Staff.full_name, Subject.subject_name, Subject.subject_code, 
+            Batch.dept_name, Batch.class_number, Batch.academic_year, Batch.semester
         ).join(Staff, Assignment.staff_id == Staff.id)\
          .join(Subject, Assignment.subject_id == Subject.id)\
-         .join(Classroom, Assignment.classroom_id == Classroom.id).all()
+         .join(Batch, Assignment.batch_id == Batch.id).all()
 
         result = []
-        for a, staff_name, subject_name, subject_code, classroom_name in assignments:
+        for a, staff_name, subject_name, subject_code, dept_name, class_number, academic_year, semester in assignments:
+            batch_name = f"{dept_name} {class_number} ({academic_year} Sem {semester})"
             result.append({
                 'id': a.id,
                 'staff_id': a.staff_id,
                 'staff_name': staff_name,
                 'subject_id': a.subject_id,
                 'subject_name': f"{subject_name} ({subject_code})",
-                'classroom_id': a.classroom_id,
-                'classroom_name': classroom_name,
+                'batch_id': a.batch_id,
+                'batch_name': batch_name,
                 'lecture_type': a.lecture_type,
                 'batch_number': a.batch_number,
             })
         return jsonify(result), 200
 
     data = request.json or {}
-    required_fields = ['staff_id', 'subject_id', 'classroom_id', 'lecture_type']
+    required_fields = ['staff_id', 'subject_id', 'batch_id', 'lecture_type']
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
 
     new_assignment = Assignment(
         staff_id=data['staff_id'],
         subject_id=data['subject_id'],
-        classroom_id=data['classroom_id'],
+        batch_id=data['batch_id'],
         lecture_type=data['lecture_type'],
         batch_number=data.get('batch_number')
     )
@@ -415,18 +348,14 @@ def delete_assignment(assign_id):
 @admin_bp.route('/attendance-report', methods=['GET'])
 @admin_required
 def get_attendance_report():
-    # Query params: classroom_id
-    classroom_id = request.args.get('classroom_id')
-    if not classroom_id:
-        return jsonify({'error': 'classroom_id is required'}), 400
+    # Query params: batch_id
+    batch_id = request.args.get('batch_id')
+    if not batch_id:
+        return jsonify({'error': 'batch_id is required'}), 400
 
-    classroom = Classroom.query.get_or_404(classroom_id)
-    batch = classroom.batch
-    if not batch:
-        return jsonify({'error': 'Classroom is not associated with any batch'}), 404
-
+    batch = Batch.query.get_or_404(batch_id)
     students = batch.students
-    assignments = Assignment.query.filter_by(classroom_id=classroom_id).all()
+    assignments = Assignment.query.filter_by(batch_id=batch_id).all()
     assignment_ids = [a.id for a in assignments]
 
     # Get total lectures for each assignment
@@ -440,8 +369,8 @@ def get_attendance_report():
     
     total_lectures_map = dict(total_lectures)
 
-    # Get total lectures for the classroom
-    total_classroom_lectures = sum(total_lectures_map.values())
+    # Get total lectures for the batch
+    total_batch_lectures = sum(total_lectures_map.values())
 
     # Get attendance for each student
     student_attendance = db.session.query(
@@ -457,13 +386,13 @@ def get_attendance_report():
     report = []
     for student in students:
         attended = student_attendance_map.get(student.id, 0)
-        percentage = (attended / total_classroom_lectures * 100) if total_classroom_lectures > 0 else 0
+        percentage = (attended / total_batch_lectures * 100) if total_batch_lectures > 0 else 0
         report.append({
             'student_id': student.id,
             'name': student.name,
             'roll_no': student.roll_no,
             'attended_lectures': attended,
-            'total_lectures': total_classroom_lectures,
+            'total_lectures': total_batch_lectures,
             'percentage': round(percentage, 2)
         })
 

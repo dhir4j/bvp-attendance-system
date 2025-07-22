@@ -75,7 +75,7 @@ export default function DashboardPage() {
         {assignments && assignments.length > 0 ? (
           assignments.map((assignment) => {
             const lectureTypes = Object.keys(assignment.lecture_types).join(', ');
-            const assignmentId = `${assignment.subject_id}-${assignment.classroom_id}`;
+            const assignmentId = `${assignment.subject_id}-${assignment.batch_id}`;
 
             return (
               <Link href={`/attendance/${assignmentId}`} key={assignmentId} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
@@ -86,7 +86,7 @@ export default function DashboardPage() {
                       <div>
                         <CardTitle className="text-lg leading-tight">{assignment.subject_name} ({assignment.subject_code})</CardTitle>
                         <CardDescription className="mt-1">
-                          {assignment.classroom_name} | Types: {lectureTypes}
+                          {assignment.batch_name} | Types: {lectureTypes}
                         </CardDescription>
                       </div>
                     </div>

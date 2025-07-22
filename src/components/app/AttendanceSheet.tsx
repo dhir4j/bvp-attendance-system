@@ -30,8 +30,8 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
   
   const lectureTypes = Object.keys(assignment.lecture_types);
   const batchesForType = lectureType ? assignment.lecture_types[lectureType] : [];
-  // Ensure batches are displayed correctly, even if only `null` (for TH) is present.
-  const showBatchSelector = batchesForType && batchesForType.length > 0 && batchesForType[0] !== null;
+  // Show batch selector only for PR/TU and if there are sub-batches defined
+  const showBatchSelector = lectureType !== 'TH' && batchesForType && batchesForType.length > 0 && batchesForType[0] !== null;
 
   const handleSubmit = async () => {
     if(!lectureType) {
@@ -40,7 +40,7 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
     }
     
     if(showBatchSelector && !batchNumber) {
-        toast({ variant: "destructive", title: "Error", description: "Please select a batch for this lecture type."});
+        toast({ variant: "destructive", title: "Error", description: "Please select a sub-batch for this lecture type."});
         return;
     }
     
@@ -50,9 +50,9 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
 
     const body = {
         subject_id: assignment.subject_id,
-        classroom_id: assignment.classroom_id,
+        batch_id: assignment.batch_id,
         lecture_type: lectureType,
-        batch_number: batchNumber ? parseInt(batchNumber) : null,
+        batch_number: showBatchSelector ? parseInt(batchNumber) : null,
         absent_rolls
     }
 
@@ -85,13 +85,13 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
       <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-3xl font-bold font-headline">{assignment.subject_name} ({assignment.subject_code})</h1>
-          <p className="text-muted-foreground">Marking attendance for {assignment.classroom_name}.</p>
+          <p className="text-muted-foreground">Marking attendance for {assignment.batch_name}.</p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>Session Details</CardTitle>
-            <CardDescription>Select the lecture type and batch for this session.</CardDescription>
+            <CardDescription>Select the lecture type and sub-batch (if applicable).</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 md:grid-cols-2">
             <div className="space-y-2">
@@ -111,14 +111,14 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
             </div>
             {showBatchSelector && (
                  <div className="space-y-2">
-                    <Label>Batch Number</Label>
+                    <Label>Sub-Batch Number</Label>
                     <Select value={batchNumber} onValueChange={setBatchNumber}>
                         <SelectTrigger disabled={!lectureType}>
-                            <SelectValue placeholder="Select batch" />
+                            <SelectValue placeholder="Select sub-batch" />
                         </SelectTrigger>
                         <SelectContent>
                         {batchesForType.map((batch) => (
-                            <SelectItem key={batch} value={String(batch)}>
+                           batch && <SelectItem key={batch} value={String(batch)}>
                             Batch {batch}
                             </SelectItem>
                         ))}
@@ -161,7 +161,7 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
               <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isLoading}>
+            <Button onClick={handleSubmit} disabled={isLoading || !lectureType || (showBatchSelector && !batchNumber)}>
               {isLoading ? 'Submitting...' : 'Submit Attendance'}
             </Button>
           </div>

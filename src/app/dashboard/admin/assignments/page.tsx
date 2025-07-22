@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import type { Staff, Subject, Assignment, Classroom } from "@/types"
+import type { Staff, Subject, Assignment, Batch } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 
 export default function AssignmentsPage() {
@@ -45,14 +45,14 @@ export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
   const [subjects, setSubjects] = useState<Subject[]>([])
-  const [classrooms, setClassrooms] = useState<Classroom[]>([])
+  const [batches, setBatches] = useState<Batch[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [newAssignment, setNewAssignment] = useState({
     staff_id: "",
     subject_id: "",
-    classroom_id: "",
+    batch_id: "",
     lecture_type: "",
     batch_number: null as number | null
   })
@@ -60,19 +60,19 @@ export default function AssignmentsPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-        const [assignmentsRes, staffRes, subjectsRes, classroomsRes] = await Promise.all([
+        const [assignmentsRes, staffRes, subjectsRes, batchesRes] = await Promise.all([
             fetch('/api/admin/assignments'),
             fetch('/api/admin/staff'),
             fetch('/api/admin/subjects'),
-            fetch('/api/admin/classrooms')
+            fetch('/api/admin/batches')
         ]);
-        if(!assignmentsRes.ok || !staffRes.ok || !subjectsRes.ok || !classroomsRes.ok) {
+        if(!assignmentsRes.ok || !staffRes.ok || !subjectsRes.ok || !batchesRes.ok) {
             throw new Error("Failed to fetch initial data");
         }
         setAssignments(await assignmentsRes.json());
         setStaff(await staffRes.json());
         setSubjects(await subjectsRes.json());
-        setClassrooms(await classroomsRes.json());
+        setBatches(await batchesRes.json());
     } catch(error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
@@ -85,7 +85,7 @@ export default function AssignmentsPage() {
   }, [fetchData]);
 
   const handleSave = async () => {
-    if(!newAssignment.staff_id || !newAssignment.subject_id || !newAssignment.lecture_type || !newAssignment.classroom_id) {
+    if(!newAssignment.staff_id || !newAssignment.subject_id || !newAssignment.lecture_type || !newAssignment.batch_id) {
         toast({ variant: "destructive", title: "Error", description: "Please fill all required fields." })
         return;
     }
@@ -97,7 +97,7 @@ export default function AssignmentsPage() {
               ...newAssignment,
               staff_id: parseInt(newAssignment.staff_id),
               subject_id: parseInt(newAssignment.subject_id),
-              classroom_id: parseInt(newAssignment.classroom_id),
+              batch_id: parseInt(newAssignment.batch_id),
             })
         });
         if (!res.ok) {
@@ -107,7 +107,7 @@ export default function AssignmentsPage() {
         toast({ title: "Success", description: "Assignment created." });
         fetchData();
         setIsModalOpen(false);
-        setNewAssignment({ staff_id: "", subject_id: "", lecture_type: "", batch_number: null, classroom_id: "" });
+        setNewAssignment({ staff_id: "", subject_id: "", lecture_type: "", batch_number: null, batch_id: "" });
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message });
     }
@@ -135,7 +135,7 @@ export default function AssignmentsPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <CardTitle>Staff-Subject Assignments</CardTitle>
-              <CardDescription>Assign staff members to subjects, classrooms, and batches.</CardDescription>
+              <CardDescription>Assign staff members to subjects, batches, and lecture types.</CardDescription>
             </div>
              <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                 <DialogTrigger asChild>
@@ -147,7 +147,7 @@ export default function AssignmentsPage() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Create New Assignment</DialogTitle>
-                        <DialogDescription>Select a staff, subject, classroom and lecture type.</DialogDescription>
+                        <DialogDescription>Select a staff, subject, batch and lecture type.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="space-y-2">
@@ -173,13 +173,13 @@ export default function AssignmentsPage() {
                             </Select>
                         </div>
                          <div className="space-y-2">
-                            <Label htmlFor="classroom">Classroom</Label>
-                            <Select onValueChange={(value) => setNewAssignment({...newAssignment, classroom_id: value})}>
-                                <SelectTrigger id="classroom">
-                                    <SelectValue placeholder="Select Classroom" />
+                            <Label htmlFor="batch">Batch</Label>
+                            <Select onValueChange={(value) => setNewAssignment({...newAssignment, batch_id: value})}>
+                                <SelectTrigger id="batch">
+                                    <SelectValue placeholder="Select Batch" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {classrooms.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.class_name} ({c.batch_info})</SelectItem>)}
+                                    {batches.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.dept_name} {b.class_number} ({b.academic_year} Sem {b.semester})</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -198,7 +198,7 @@ export default function AssignmentsPage() {
                         </div>
                          {newAssignment.lecture_type && newAssignment.lecture_type !== 'TH' && (
                             <div className="space-y-2">
-                                <Label htmlFor="batch_number">Batch Number (for PR/TU)</Label>
+                                <Label htmlFor="batch_number">Sub-Batch Number (for PR/TU)</Label>
                                 <Input id="batch_number" type="number" placeholder="e.g. 1, 2, 3" onChange={(e) => setNewAssignment({...newAssignment, batch_number: e.target.value ? parseInt(e.target.value) : null})} />
                             </div>
                         )}
@@ -218,9 +218,9 @@ export default function AssignmentsPage() {
                 <TableRow>
                     <TableHead>Staff Member</TableHead>
                     <TableHead>Assigned Subject</TableHead>
-                    <TableHead>Classroom</TableHead>
-                    <TableHead>Type</TableHead>
                     <TableHead>Batch</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Sub-Batch</TableHead>
                     <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
                 </TableHeader>
@@ -233,7 +233,7 @@ export default function AssignmentsPage() {
                     <TableRow key={a.id}>
                       <TableCell className="font-medium">{a.staff_name}</TableCell>
                       <TableCell>{a.subject_name}</TableCell>
-                      <TableCell>{a.classroom_name}</TableCell>
+                      <TableCell>{a.batch_name}</TableCell>
                       <TableCell>{a.lecture_type}</TableCell>
                       <TableCell>{a.batch_number ?? 'N/A'}</TableCell>
                       <TableCell className="text-right">

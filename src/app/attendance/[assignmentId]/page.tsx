@@ -42,7 +42,7 @@ export default function AttendancePage({ params }: { params: { assignmentId: str
   }
   
   // The assignmentId from the URL is a composite key, we just pass it down to find the right one.
-  const subjectAssignment = assignments?.find(a => `${a.subject_id}-${a.classroom_id}` === params.assignmentId) || null;
+  const subjectAssignment = assignments?.find(a => `${a.subject_id}-${a.batch_id}` === params.assignmentId) || null;
 
   if (!subjectAssignment) {
     notFound();
