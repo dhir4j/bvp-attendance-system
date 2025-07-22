@@ -124,9 +124,12 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
           <p className="text-muted-foreground">Marking attendance for {assignment.batch_name}.</p>
         </div>
 
-        <Card>
+        <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>1. Session Details</CardTitle>
+            <CardTitle>
+                <span className="text-primary mr-2">1.</span>
+                Session Details
+            </CardTitle>
             <CardDescription>Select the lecture type and sub-batch (if applicable).</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 md:grid-cols-2">
@@ -165,9 +168,12 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>2. Mark Absentees</CardTitle>
+             <CardTitle>
+                <span className="text-primary mr-2">2.</span>
+                Mark Absentees
+            </CardTitle>
             <CardDescription>Enter the roll numbers of all absent students, separated by commas or spaces.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -259,8 +265,8 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
       {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={handleSuccessDialogClose}>
         <DialogContent className="sm:max-w-md text-center p-8">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-                <CheckCircle className="h-12 w-12 text-green-600" />
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/50">
+                <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
             </div>
             <h3 className="mt-4 text-2xl font-semibold font-headline">Attendance Recorded!</h3>
             <p className="mt-2 text-muted-foreground">
