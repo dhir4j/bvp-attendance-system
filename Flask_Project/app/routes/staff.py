@@ -15,7 +15,8 @@ def staff_login():
     u = Staff.query.filter_by(username=d['username']).first()
     if u and bcrypt.check_password_hash(u.password_hash, d['password']):
         session['staff_id'] = u.id
-        return jsonify({'message':'Login successful'})
+        session['staff_full_name'] = u.full_name
+        return jsonify({'message':'Login successful', 'full_name': u.full_name})
     return jsonify({'error':'Invalid credentials'}),401
 
 @staff_bp.route('/assignments', methods=['GET'])
@@ -328,4 +329,5 @@ def get_roster(batch_id):
     return jsonify([{'id': s.id, 'name': s.name, 'roll_no': s.roll_no, 'enrollment_no': s.enrollment_no, 'batch_number': s.batch_number} for s in students])
 
 
+    
     

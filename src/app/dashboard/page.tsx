@@ -6,6 +6,7 @@ import { BookCopy, ChevronRight } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
 import { StaffAssignmentsResponse } from '@/types';
+import { useAuth } from '@/hooks/use-auth';
 import {
   Card,
   CardDescription,
@@ -16,6 +17,7 @@ import {
 
 export default function DashboardPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [assignments, setAssignments] = useState<StaffAssignmentsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -67,7 +69,7 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-3xl font-bold font-headline">Welcome Back!</h1>
+        <h1 className="text-3xl font-bold font-headline">Welcome Back, {user?.name || 'Staff'}!</h1>
         <p className="text-muted-foreground">Select a subject to mark attendance.</p>
       </div>
 
@@ -111,3 +113,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
