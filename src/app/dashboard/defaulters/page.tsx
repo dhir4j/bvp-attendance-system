@@ -1,7 +1,7 @@
 // src/app/dashboard/defaulters/page.tsx
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   Table,
   TableBody,
@@ -30,12 +30,22 @@ import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { UserX } from "lucide-react"
 
+interface SubjectIdentifier {
+  id: number;
+  name: string;
+}
+
 export default function DefaultersPage() {
   const { toast } = useToast()
   const [assignments, setAssignments] = useState<StaffAssignmentsResponse | null>(null)
+  const [subjects, setSubjects] = useState<SubjectIdentifier[]>([])
+
   const [selectedBatchId, setSelectedBatchId] = useState<string>("")
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
   const [reportData, setReportData] = useState<AttendanceReport[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSubjectsLoading, setIsSubjectsLoading] = useState(false)
   const [isReportLoading, setIsReportLoading] = useState(false)
 
   const fetchAssignments = useCallback(async () => {
@@ -55,13 +65,37 @@ export default function DefaultersPage() {
   useEffect(() => {
     fetchAssignments()
   }, [fetchAssignments])
+  
+  const fetchSubjectsForBatch = useCallback(async (batchId: string) => {
+    if (!batchId) return;
+    setIsSubjectsLoading(true);
+    setSubjects([]);
+    setSelectedSubjectId("");
+    try {
+      const res = await fetch(`/api/staff/subjects/by-batch/${batchId}`);
+      if (!res.ok) throw new Error("Failed to fetch subjects for this batch.");
+      setSubjects(await res.json());
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsSubjectsLoading(false);
+    }
+  }, [toast]);
 
-  const fetchReport = useCallback(async (batchId: string) => {
-    if (!batchId) return
+
+  const fetchReport = useCallback(async () => {
+    if (!selectedBatchId) return
+    
     setIsReportLoading(true)
     setReportData([])
+    
+    const params = new URLSearchParams({ batch_id: selectedBatchId });
+    if (selectedSubjectId) {
+      params.append('subject_id', selectedSubjectId);
+    }
+
     try {
-      const res = await fetch(`/api/staff/defaulters?batch_id=${batchId}`)
+      const res = await fetch(`/api/staff/defaulters?${params.toString()}`)
       const data = await res.json()
       if (!res.ok) {
         throw new Error(data.error || "Failed to fetch attendance report")
@@ -72,36 +106,59 @@ export default function DefaultersPage() {
     } finally {
       setIsReportLoading(false)
     }
-  }, [toast])
+  }, [toast, selectedBatchId, selectedSubjectId]);
+
+  useEffect(() => {
+    fetchReport();
+  }, [fetchReport]);
 
   const handleBatchChange = (batchId: string) => {
     setSelectedBatchId(batchId)
-    fetchReport(batchId)
+    fetchSubjectsForBatch(batchId);
   }
 
   const defaulters = reportData.filter(student => student.percentage < 75);
+  const uniqueBatches = assignments ? [...new Map(assignments.map(item => [item['batch_id'], item])).values()] : [];
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Defaulter List</CardTitle>
-        <CardDescription>View students with less than 75% attendance for a subject.</CardDescription>
+        <CardDescription>View students with less than 75% attendance.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="max-w-sm mb-6">
-          <Label htmlFor="batch">Select Subject/Batch</Label>
-          <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}>
-            <SelectTrigger id="batch">
-              <SelectValue placeholder="Select from your assignments..." />
-            </SelectTrigger>
-            <SelectContent>
-              {assignments?.map((a) => (
-                <SelectItem key={`${a.subject_id}-${a.batch_id}`} value={String(a.batch_id)}>
-                   {a.subject_name} ({a.batch_name})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+           <div className="space-y-2">
+              <Label htmlFor="batch">Select Batch</Label>
+              <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}>
+                <SelectTrigger id="batch">
+                  <SelectValue placeholder="Select a batch..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {uniqueBatches.map((a) => (
+                    <SelectItem key={a.batch_id} value={String(a.batch_id)}>
+                      {a.batch_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subject">Select Subject</Label>
+              <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={!selectedBatchId || isSubjectsLoading}>
+                <SelectTrigger id="subject">
+                  <SelectValue placeholder="All Assigned Subjects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Subjects</SelectItem>
+                  {subjects.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
         </div>
 
         {selectedBatchId && (
@@ -145,7 +202,7 @@ export default function DefaultersPage() {
             <Alert>
                 <UserX className="h-4 w-4" />
                 <AlertDescription>
-                    Please select a subject to view the defaulter list.
+                    Please select a batch to view the defaulter list.
                 </AlertDescription>
             </Alert>
         )}

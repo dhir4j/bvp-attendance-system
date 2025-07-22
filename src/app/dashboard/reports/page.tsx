@@ -180,7 +180,7 @@ export default function StaffReportsPage() {
                   <SelectValue placeholder="All Your Assigned Subjects" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Your Assigned Subjects</SelectItem>
+                  <SelectItem value="all">All Your Assigned Subjects</SelectItem>
                   {subjects.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
                       {s.name}

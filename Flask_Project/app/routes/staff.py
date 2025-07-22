@@ -276,5 +276,3 @@ def get_staff_assigned_subjects(batch_id):
     
     result = [{'id': s.id, 'name': f"{s.subject_name} ({s.subject_code})"} for s in subjects]
     return jsonify(result)
-
-    
