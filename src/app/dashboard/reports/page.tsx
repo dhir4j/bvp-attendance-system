@@ -210,7 +210,7 @@ export default function StaffReportsPage() {
               <CardTitle>Attendance Report</CardTitle>
               <CardDescription>View detailed attendance for your assigned subjects.</CardDescription>
             </div>
-            <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <Button variant="outline" onClick={handleViewStudents} disabled={!selectedBatchId}>
                 <Users className="mr-2 h-4 w-4" /> View Student Roster
               </Button>

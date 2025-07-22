@@ -169,7 +169,7 @@ export default function DefaultersPage() {
             <CardTitle>Defaulter List</CardTitle>
             <CardDescription>View students with less than 75% attendance.</CardDescription>
           </div>
-          <Button variant="outline" onClick={handleExportCSV} disabled={!showReport || defaulters.length === 0}>
+          <Button variant="outline" onClick={handleExportCSV} disabled={!showReport || defaulters.length === 0} className="w-full sm:w-auto">
             <FileDown className="mr-2 h-4 w-4" /> Export CSV
           </Button>
         </div>

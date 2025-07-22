@@ -182,7 +182,7 @@ export default function ReportPage() {
               <CardTitle>Attendance Report</CardTitle>
               <CardDescription>View attendance percentages by batch and subject.</CardDescription>
             </div>
-            <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <Button variant="outline" onClick={handleViewStudents} disabled={!selectedBatchId}>
                 <Users className="mr-2 h-4 w-4" /> View Student Roster
               </Button>
