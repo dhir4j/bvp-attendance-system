@@ -221,26 +221,34 @@ def get_staff_attendance_report():
 
     batch = Batch.query.get_or_404(batch_id)
     
+    # Base query for assignments for this staff
     base_assignments_query = Assignment.query.filter_by(batch_id=batch_id, staff_id=staff_id)
     if subject_id:
         base_assignments_query = base_assignments_query.filter_by(subject_id=subject_id)
 
     theory_assignments = base_assignments_query.filter_by(lecture_type='TH').all()
+    
+    # Get all practical/tutorial assignments for this staff and subject
     practical_assignments = base_assignments_query.filter(Assignment.lecture_type.in_(['PR', 'TU'])).all()
     
+    # Determine the pool of students to generate the report for.
+    students_to_report = []
+    if lecture_type and lecture_type != 'all' and lecture_type in ['PR', 'TU']:
+        # If a specific PR/TU type is selected, find which sub-batches this staff teaches.
+        staff_sub_batches = [a.batch_number for a in practical_assignments if a.lecture_type == lecture_type]
+        # Filter the main student list to only those in the taught sub-batches.
+        students_to_report = [s for s in batch.students if s.batch_number in staff_sub_batches]
+    else:
+        # For Theory or "All types", report on all students in the batch.
+        students_to_report = batch.students
+
     report = []
-
-    sub_batch_students = {}
-    for s in batch.students:
-        if s.batch_number:
-            sub_batch_students.setdefault(s.batch_number, []).append(s)
-
-    for student in batch.students:
+    for student in students_to_report:
         total_lectures = 0
         attended_lectures = 0
 
-        # Calculate Theory attendance (applies to all students)
-        if theory_assignments and (not lecture_type or lecture_type == 'TH'):
+        # Calculate Theory attendance if it's selected or if 'all' are selected
+        if theory_assignments and (not lecture_type or lecture_type == 'all' or lecture_type == 'TH'):
             th_assignment_ids = [a.id for a in theory_assignments]
             th_total = db.session.query(db.func.sum(TotalLectures.lecture_count)).filter(TotalLectures.assignment_id.in_(th_assignment_ids)).scalar() or 0
             th_attended = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
@@ -251,14 +259,14 @@ def get_staff_attendance_report():
             total_lectures += th_total
             attended_lectures += th_attended
 
-        # Calculate Practical/Tutorial attendance (applies only if student is in a sub-batch)
-        if student.batch_number and practical_assignments and (not lecture_type or lecture_type in ['PR', 'TU']):
-            # Filter assignments for this student's specific sub-batch and lecture type
+        # Calculate Practical/Tutorial attendance for this student's specific sub-batch
+        if student.batch_number and practical_assignments and (not lecture_type or lecture_type == 'all' or lecture_type in ['PR', 'TU']):
             student_pr_assignments_query = base_assignments_query.filter(
                 Assignment.lecture_type.in_(['PR', 'TU']),
                 Assignment.batch_number == student.batch_number
             )
-            if lecture_type:
+            # If a specific lecture type is requested, filter by it
+            if lecture_type and lecture_type != 'all':
                 student_pr_assignments_query = student_pr_assignments_query.filter_by(lecture_type=lecture_type)
             
             student_pr_assignments = student_pr_assignments_query.all()
