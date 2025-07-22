@@ -3,7 +3,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookCopy, Home, LogOut, Shield, FileBarChart, UserX } from "lucide-react"
+import { BookCopy, Home, LogOut, Shield, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building } from "lucide-react"
 
 import {
   Sidebar,
@@ -15,15 +15,27 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar"
 
-export function AppSidebar() {
-  const pathname = usePathname()
-
-  const menuItems = [
+const staffItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/dashboard/reports", label: "Reports", icon: FileBarChart },
     { href: "/dashboard/defaulters", label: "Defaulters", icon: UserX },
-    { href: "/dashboard/admin", label: "Admin Panel", icon: Shield },
-  ]
+]
+
+const adminItems = [
+    { href: "/dashboard/admin/staff", label: "Staff", icon: Users },
+    { href: "/dashboard/admin/departments", label: "Departments", icon: Building },
+    { href: "/dashboard/admin/subjects", label: "Subjects", icon: Book },
+    { href: "/dashboard/admin/batches", label: "Batches", icon: School2 },
+    { href: "/dashboard/admin/assignments", label: "Assignments", icon: LinkIcon },
+    { href: "/dashboard/admin/report", label: "Reports", icon: FileBarChart },
+]
+
+export function AppSidebar() {
+  const pathname = usePathname()
+  const isAdminSection = pathname.startsWith("/dashboard/admin");
+
+  const menuItems = isAdminSection ? adminItems : staffItems;
+  const logoutHref = isAdminSection ? "/login/admin" : "/";
 
   return (
     <Sidebar>
@@ -40,7 +52,6 @@ export function AppSidebar() {
               <SidebarMenuButton
                 asChild
                 isActive={pathname.startsWith(item.href) && (item.href !== '/dashboard' || pathname === '/dashboard')}
-                className="bg-transparent data-[active=true]:bg-primary/20 data-[active=true]:text-primary-foreground"
               >
                 <Link href={item.href}>
                   <item.icon className="h-5 w-5" />
@@ -49,13 +60,26 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
+          {!isAdminSection && (
+             <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname.startsWith("/dashboard/admin")}
+              >
+                <Link href="/dashboard/admin">
+                  <Shield className="h-5 w-5" />
+                  <span>Admin Panel</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
              <SidebarMenuButton asChild className="bg-transparent hover:bg-destructive/20">
-                <Link href="/">
+                <Link href={logoutHref}>
                     <LogOut className="h-5 w-5" />
                     <span>Logout</span>
                 </Link>

@@ -48,8 +48,8 @@ export default function StaffReportsPage() {
   const [subjects, setSubjects] = useState<SubjectIdentifier[]>([])
   
   const [selectedBatchId, setSelectedBatchId] = useState<string>("")
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
-  const [selectedLectureType, setSelectedLectureType] = useState<string>("")
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("all")
+  const [selectedLectureType, setSelectedLectureType] = useState<string>("all")
   const [reportData, setReportData] = useState<AttendanceReport[]>([])
   
   const [isLoading, setIsLoading] = useState(true)
@@ -81,7 +81,7 @@ export default function StaffReportsPage() {
     if (!batchId) return;
     setIsSubjectsLoading(true);
     setSubjects([]);
-    setSelectedSubjectId("");
+    setSelectedSubjectId("all");
     try {
       const res = await fetch(`/api/staff/subjects/by-batch/${batchId}`);
       if (!res.ok) throw new Error("Failed to fetch subjects for this batch.");
@@ -133,7 +133,10 @@ export default function StaffReportsPage() {
   const handleViewStudents = async () => {
     if (!selectedBatchId) return;
     try {
-      const res = await fetch(`/api/admin/batches/${selectedBatchId}`); // uses admin route, ok for GET
+      // Note: Using the admin route here is acceptable for GETting public batch info
+      // if the backend auth for this specific route allows it.
+      // A dedicated staff route would be cleaner for stricter role separation.
+      const res = await fetch(`/api/admin/batches/${selectedBatchId}`);
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || "Failed to fetch student details");
@@ -149,7 +152,7 @@ export default function StaffReportsPage() {
   const uniqueBatches = assignments ? [...new Map(assignments.map(item => [item['batch_id'], item])).values()] : [];
   
   const assignedLectureTypes = useMemo(() => {
-    if (!selectedBatchId || !selectedSubjectId || !assignments) return [];
+    if (!selectedBatchId || selectedSubjectId === 'all' || !assignments) return [];
     
     const relevantAssignment = assignments.find(a => 
       String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId

@@ -41,8 +41,8 @@ export default function DefaultersPage() {
   const [subjects, setSubjects] = useState<SubjectIdentifier[]>([])
 
   const [selectedBatchId, setSelectedBatchId] = useState<string>("")
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
-  const [selectedLectureType, setSelectedLectureType] = useState<string>("")
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("all")
+  const [selectedLectureType, setSelectedLectureType] = useState<string>("all")
   const [reportData, setReportData] = useState<AttendanceReport[]>([])
 
   const [isLoading, setIsLoading] = useState(true)
@@ -71,7 +71,7 @@ export default function DefaultersPage() {
     if (!batchId) return;
     setIsSubjectsLoading(true);
     setSubjects([]);
-    setSelectedSubjectId("");
+    setSelectedSubjectId("all");
     try {
       const res = await fetch(`/api/staff/subjects/by-batch/${batchId}`);
       if (!res.ok) throw new Error("Failed to fetch subjects for this batch.");
@@ -120,8 +120,8 @@ export default function DefaultersPage() {
 
   const handleBatchChange = (batchId: string) => {
     setSelectedBatchId(batchId)
-    setSelectedSubjectId("")
-    setSelectedLectureType("")
+    setSelectedSubjectId("all")
+    setSelectedLectureType("all")
     setReportData([])
     fetchSubjectsForBatch(batchId);
   }
@@ -130,7 +130,7 @@ export default function DefaultersPage() {
   const uniqueBatches = assignments ? [...new Map(assignments.map(item => [item['batch_id'], item])).values()] : [];
   
   const assignedLectureTypes = useMemo(() => {
-    if (!selectedBatchId || !selectedSubjectId || !assignments) return [];
+    if (!selectedBatchId || selectedSubjectId === 'all' || !assignments) return [];
     
     const relevantAssignment = assignments.find(a => 
       String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId

@@ -40,7 +40,7 @@ export default function ReportPage() {
   const [batches, setBatches] = useState<Batch[]>([])
   const [subjects, setSubjects] = useState<SubjectIdentifier[]>([])
   const [selectedBatchId, setSelectedBatchId] = useState<string>("")
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("all")
   const [reportData, setReportData] = useState<AttendanceReport[]>([])
   
   const [isLoading, setIsLoading] = useState(true)
@@ -69,7 +69,7 @@ export default function ReportPage() {
     if (!batchId) return;
     setIsSubjectsLoading(true);
     setSubjects([]);
-    setSelectedSubjectId("");
+    setSelectedSubjectId("all");
     try {
       const res = await fetch(`/api/admin/subjects/by-batch/${batchId}`);
       if (!res.ok) throw new Error("Failed to fetch subjects for this batch.");
@@ -88,7 +88,7 @@ export default function ReportPage() {
     setReportData([])
     
     const params = new URLSearchParams({ batch_id: selectedBatchId });
-    if (selectedSubjectId) {
+    if (selectedSubjectId && selectedSubjectId !== "all") {
       params.append('subject_id', selectedSubjectId);
     }
 
@@ -115,7 +115,7 @@ export default function ReportPage() {
 
   const handleBatchChange = (batchId: string) => {
     setSelectedBatchId(batchId)
-    setSelectedSubjectId("")
+    setSelectedSubjectId("all")
     setReportData([])
     fetchSubjectsForBatch(batchId);
   }
