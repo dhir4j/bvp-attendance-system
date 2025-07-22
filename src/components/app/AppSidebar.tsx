@@ -2,8 +2,9 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { BookCopy, Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog } from "lucide-react"
+import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog } from "lucide-react"
 
 import {
   Sidebar,
@@ -43,7 +44,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-2 p-2">
-          <BookCopy className="h-8 w-8 text-primary" />
+          <Image src="/images/bvp.png" alt="BVP Logo" width={32} height={32} className="h-8 w-8" />
           <h1 className="text-xl font-headline font-bold">BVP Attendance</h1>
         </div>
       </SidebarHeader>
