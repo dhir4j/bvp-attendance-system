@@ -99,7 +99,7 @@ export default function DefaultersPage() {
     }
 
     try {
-      const res = await fetch(`/api/staff/attendance-report?${params.toString()}`)
+      const res = await fetch(`/api/staff/defaulters?${params.toString()}`)
       const data = await res.json()
       if (!res.ok) {
         throw new Error(data.error || "Failed to fetch attendance report")
@@ -128,6 +128,17 @@ export default function DefaultersPage() {
 
   const defaulters = reportData.filter(student => student.percentage < 75);
   const uniqueBatches = assignments ? [...new Map(assignments.map(item => [item['batch_id'], item])).values()] : [];
+  
+  const assignedLectureTypes = useMemo(() => {
+    if (!selectedBatchId || !selectedSubjectId || !assignments) return [];
+    
+    const relevantAssignment = assignments.find(a => 
+      String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId
+    );
+    
+    return relevantAssignment ? Object.keys(relevantAssignment.lecture_types) : [];
+  }, [selectedBatchId, selectedSubjectId, assignments]);
+
 
   return (
     <Card>
@@ -170,15 +181,17 @@ export default function DefaultersPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="lecture_type">Lecture Type</Label>
-              <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={!selectedBatchId}>
+              <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={!selectedSubjectId || selectedSubjectId === 'all'}>
                 <SelectTrigger id="lecture_type">
                   <SelectValue placeholder="All Lecture Types" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="TH">Theory</SelectItem>
-                  <SelectItem value="PR">Practical</SelectItem>
-                  <SelectItem value="TU">Tutorial</SelectItem>
+                  {assignedLectureTypes.map(type => (
+                    <SelectItem key={type} value={type}>
+                      {type === 'TH' ? 'Theory' : type === 'PR' ? 'Practical' : 'Tutorial'}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

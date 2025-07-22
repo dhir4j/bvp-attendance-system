@@ -1,7 +1,7 @@
 // src/app/dashboard/reports/page.tsx
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   Table,
   TableBody,
@@ -49,6 +49,7 @@ export default function StaffReportsPage() {
   
   const [selectedBatchId, setSelectedBatchId] = useState<string>("")
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
+  const [selectedLectureType, setSelectedLectureType] = useState<string>("")
   const [reportData, setReportData] = useState<AttendanceReport[]>([])
   
   const [isLoading, setIsLoading] = useState(true)
@@ -99,8 +100,11 @@ export default function StaffReportsPage() {
     setReportData([]);
     
     const params = new URLSearchParams({ batch_id: selectedBatchId });
-    if (selectedSubjectId) {
+    if (selectedSubjectId && selectedSubjectId !== 'all') {
       params.append('subject_id', selectedSubjectId);
+    }
+    if (selectedLectureType && selectedLectureType !== 'all') {
+      params.append('lecture_type', selectedLectureType);
     }
 
     try {
@@ -113,11 +117,13 @@ export default function StaffReportsPage() {
     } finally {
       setIsReportLoading(false);
     }
-  }, [selectedBatchId, selectedSubjectId, toast]);
+  }, [selectedBatchId, selectedSubjectId, selectedLectureType, toast]);
 
   useEffect(() => {
-    fetchReport();
-  }, [fetchReport]);
+     if (selectedBatchId) {
+        fetchReport();
+    }
+  }, [fetchReport, selectedBatchId, selectedSubjectId, selectedLectureType]);
 
   const handleBatchChange = (batchId: string) => {
     setSelectedBatchId(batchId);
@@ -141,6 +147,17 @@ export default function StaffReportsPage() {
   }
 
   const uniqueBatches = assignments ? [...new Map(assignments.map(item => [item['batch_id'], item])).values()] : [];
+  
+  const assignedLectureTypes = useMemo(() => {
+    if (!selectedBatchId || !selectedSubjectId || !assignments) return [];
+    
+    const relevantAssignment = assignments.find(a => 
+      String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId
+    );
+    
+    return relevantAssignment ? Object.keys(relevantAssignment.lecture_types) : [];
+  }, [selectedBatchId, selectedSubjectId, assignments]);
+
 
   return (
     <>
@@ -157,7 +174,7 @@ export default function StaffReportsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="space-y-2">
               <Label htmlFor="batch">Select Batch</Label>
               <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}>
@@ -184,6 +201,22 @@ export default function StaffReportsPage() {
                   {subjects.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
                       {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+             <div className="space-y-2">
+              <Label htmlFor="lecture_type">Lecture Type</Label>
+              <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={!selectedSubjectId || selectedSubjectId === 'all'}>
+                <SelectTrigger id="lecture_type">
+                  <SelectValue placeholder="All Lecture Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                   {assignedLectureTypes.map(type => (
+                    <SelectItem key={type} value={type}>
+                      {type === 'TH' ? 'Theory' : type === 'PR' ? 'Practical' : 'Tutorial'}
                     </SelectItem>
                   ))}
                 </SelectContent>
