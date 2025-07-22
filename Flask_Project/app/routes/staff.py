@@ -5,6 +5,7 @@ from .. import db, bcrypt
 from ..auth import staff_required
 from datetime import date
 from sqlalchemy.orm import joinedload
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 
 staff_bp = Blueprint('staff', __name__)
@@ -159,7 +160,6 @@ def mark_attendance():
     for student in students_for_session:
         status = 'absent' if student.roll_no in absent_rolls else 'present'
         
-        # Check if a record for this student, for this assignment, on this day exists
         existing_record = AttendanceRecord.query.filter_by(
             assignment_id=assignment.id,
             student_id=student.id,
@@ -167,36 +167,28 @@ def mark_attendance():
         ).first()
 
         if existing_record:
-            # Logic for a student who already has an attendance record today
+            # If a record exists, they must have been present for a previous lecture today.
             if status == 'present':
-                # If they were marked absent before, now they are present
-                if existing_record.status == 'absent':
-                    existing_record.status = 'present'
-                # Increment attended lecture count because they are present for this lecture
+                # Increment their attended lecture count
                 existing_record.lecture_count += 1
-            else: # status is 'absent'
-                # If they were present before, now they are absent for this lecture.
-                # Just update the status. DO NOT change the lecture_count, as that
-                # tracks their previously attended lectures for the day.
-                if existing_record.status == 'present':
-                    existing_record.status = 'absent'
-                # If they were already absent, nothing changes.
-            
+            # If status is 'absent' for this lecture, we do NOT touch their lecture_count.
+            # We also don't change their status, because 'present' takes precedence for the day.
+            # A student is either 'present' for the day (attended >= 1 lecture) or 'absent' (attended 0).
+            # The count itself tracks how many they attended.
         else:
             # Create a new record if one doesn't exist for the student today
-            record = AttendanceRecord(
+            new_record = AttendanceRecord(
                 assignment_id=assignment.id,
                 student_id=student.id,
                 date=today,
                 status=status,
-                # If present for this first lecture, count is 1. If absent, it's 0.
                 lecture_count=1 if status == 'present' else 0
             )
-            db.session.add(record)
+            db.session.add(new_record)
 
     try:
         db.session.commit()
-    except Exception as e:
+    except (IntegrityError, OperationalError) as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to save attendance', 'details': str(e)}), 500
 
@@ -268,9 +260,11 @@ def get_staff_attendance_report():
             total_lectures = db.session.query(db.func.sum(TotalLectures.lecture_count))\
                 .filter(TotalLectures.assignment_id.in_(assignment_ids)).scalar() or 0
 
+            # Calculate attended lectures for this student (CORRECTED)
             attended_lectures = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
                 AttendanceRecord.assignment_id.in_(assignment_ids),
-                AttendanceRecord.student_id == student.id
+                AttendanceRecord.student_id == student.id,
+                AttendanceRecord.status == 'present' # Only count 'present' records
             ).scalar() or 0
 
         percentage = (attended_lectures / total_lectures * 100) if total_lectures > 0 else 0
@@ -329,6 +323,8 @@ def get_roster(batch_id):
 
 
     
+    
+
     
 
     

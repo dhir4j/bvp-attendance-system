@@ -16,6 +16,7 @@ admin_bp = Blueprint('admin', __name__)
 @admin_bp.route('/login', methods=['POST'])
 def admin_login():
     data = request.json or {}
+    # Use environment variables for admin credentials in a real app
     if data.get('username') == 'bvp@admin' and data.get('password') == 'bvp@pass':
         session['is_admin'] = True
         return jsonify({'message': 'Admin logged in'}), 200
@@ -79,12 +80,23 @@ def update_delete_staff(staff_id):
         return jsonify({'message': 'Staff updated'}), 200
 
     # DELETE
-    db.session.delete(staff)
     try:
+        # Before deleting staff, delete their assignments and related records
+        assignments_to_delete = Assignment.query.filter_by(staff_id=staff.id).all()
+        for assignment in assignments_to_delete:
+            AttendanceRecord.query.filter_by(assignment_id=assignment.id).delete()
+            TotalLectures.query.filter_by(assignment_id=assignment.id).delete()
+            db.session.delete(assignment)
+            
+        db.session.delete(staff)
         db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Cannot delete staff as they are referenced elsewhere.'}), 400
     except OperationalError:
         db.session.rollback()
         return jsonify({'error': 'Database connection error, please retry'}), 500
+        
     return jsonify({'message': 'Staff deleted'}), 200
 
 # -- Department CRUD --
@@ -137,12 +149,20 @@ def update_delete_department(dept_code):
         return jsonify({'message': 'Department updated'}), 200
 
     # DELETE
-    db.session.delete(dept)
     try:
+        # Check if any subjects are linked to this department
+        if Subject.query.filter_by(dept_code=dept_code).first():
+            return jsonify({'error': 'Cannot delete department with subjects assigned to it.'}), 400
+        
+        db.session.delete(dept)
         db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Cannot delete department as it is referenced elsewhere.'}), 400
     except OperationalError:
         db.session.rollback()
         return jsonify({'error': 'Database connection error, please retry'}), 500
+        
     return jsonify({'message': 'Department deleted'}), 200
 
 # -- Subject CRUD --
@@ -199,11 +219,31 @@ def update_delete_subject(sub_id):
             sub.subject_name = data['subject_name']
         if 'subject_code' in data:
             sub.subject_code = data['subject_code']
-        db.session.commit()
+        try:
+            db.session.commit()
+        except OperationalError:
+            db.session.rollback()
+            return jsonify({'error': 'Database connection error, please retry'}), 500
         return jsonify({'message': 'Subject updated'}), 200
 
-    db.session.delete(sub)
-    db.session.commit()
+    # DELETE
+    try:
+        # Before deleting subject, delete its assignments and related records
+        assignments_to_delete = Assignment.query.filter_by(subject_id=sub.id).all()
+        for assignment in assignments_to_delete:
+            AttendanceRecord.query.filter_by(assignment_id=assignment.id).delete()
+            TotalLectures.query.filter_by(assignment_id=assignment.id).delete()
+            db.session.delete(assignment)
+
+        db.session.delete(sub)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Cannot delete subject as it is referenced elsewhere.'}), 400
+    except OperationalError:
+        db.session.rollback()
+        return jsonify({'error': 'Database connection error, please retry'}), 500
+        
     return jsonify({'message': 'Subject deleted'}), 200
 
 # -- Batch and Student Management --
@@ -292,9 +332,26 @@ def manage_single_batch(batch_id):
         })
 
     # DELETE
-    # This will also delete associations in student_batches due to cascade settings
-    db.session.delete(batch)
-    db.session.commit()
+    try:
+        # Manually delete assignments and their related records first
+        assignments_to_delete = Assignment.query.filter_by(batch_id=batch.id).all()
+        for assignment in assignments_to_delete:
+            AttendanceRecord.query.filter_by(assignment_id=assignment.id).delete()
+            TotalLectures.query.filter_by(assignment_id=assignment.id).delete()
+            db.session.delete(assignment)
+
+        # Disassociate students from the batch (clears the join table)
+        batch.students = []
+        
+        db.session.delete(batch)
+        db.session.commit()
+    except IntegrityError as e:
+        db.session.rollback()
+        return jsonify({'error': 'Cannot delete batch due to a data conflict.', 'details': str(e)}), 400
+    except OperationalError:
+        db.session.rollback()
+        return jsonify({'error': 'Database connection error, please retry'}), 500
+        
     return jsonify({'message': 'Batch deleted'})
 
 
@@ -350,7 +407,12 @@ def manage_assignments():
         batch_number=data.get('batch_number')
     )
     db.session.add(new_assignment)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except OperationalError:
+        db.session.rollback()
+        return jsonify({'error': 'Database connection error, please retry'}), 500
+        
     return jsonify({'message': 'Assignment created', 'id': new_assignment.id}), 201
 
 @admin_bp.route('/assignments/<int:assign_id>', methods=['DELETE'])
@@ -358,13 +420,16 @@ def manage_assignments():
 def delete_assignment(assign_id):
     assignment = Assignment.query.get_or_404(assign_id)
     
-    # Manually delete dependent records before deleting the assignment
     try:
-        AttendanceRecord.query.filter_by(assignment_id=assign_id).delete()
-        TotalLectures.query.filter_by(assignment_id=assign_id).delete()
+        # Manually delete dependent records before deleting the assignment
+        AttendanceRecord.query.filter_by(assignment_id=assign_id).delete(synchronize_session=False)
+        TotalLectures.query.filter_by(assignment_id=assign_id).delete(synchronize_session=False)
         
         db.session.delete(assignment)
         db.session.commit()
+    except OperationalError:
+        db.session.rollback()
+        return jsonify({'error': 'Database connection error, please retry'}), 500
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Failed to delete assignment and its related records', 'details': str(e)}), 500
@@ -415,8 +480,6 @@ def get_attendance_report():
 
         if not student_specific_assignments:
             # This student has no lectures for this filtered type (e.g., they are not in a PR batch)
-            # You might want to decide if they should appear in the report with 0/0 or be excluded.
-            # Here we'll include them with 0/0.
             pass
         else:
             assignment_ids = [a.id for a in student_specific_assignments]
@@ -425,17 +488,16 @@ def get_attendance_report():
             total_lectures = db.session.query(db.func.sum(TotalLectures.lecture_count))\
                 .filter(TotalLectures.assignment_id.in_(assignment_ids)).scalar() or 0
 
-            # Calculate attended lectures for this student
+            # Calculate attended lectures for this student (CORRECTED)
             attended_lectures = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
                 AttendanceRecord.assignment_id.in_(assignment_ids),
                 AttendanceRecord.student_id == student.id,
-                AttendanceRecord.status == 'present'
+                AttendanceRecord.status == 'present' # Only count 'present' records
             ).scalar() or 0
 
         percentage = (attended_lectures / total_lectures * 100) if total_lectures > 0 else 0
         
         # Only include students in the report if they were supposed to have lectures of the specified type
-        # This prevents students not in a practical batch from showing up in a 'PR' report
         if lecture_type == 'TH' or student.batch_number is not None:
              report.append({
                 'student_id': student.id,
@@ -495,4 +557,6 @@ def get_staff_assignments_report():
     
     return jsonify(list(staff_assignments.values()))
     
+    
+
     
