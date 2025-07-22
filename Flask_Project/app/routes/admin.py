@@ -287,6 +287,18 @@ def manage_batches():
 
     # POST
     data = request.form
+    
+    # Check for existing batch to prevent UniqueViolation error
+    existing_batch = Batch.query.filter_by(
+        dept_name=data['dept_name'],
+        class_number=data['class_number'],
+        academic_year=data['academic_year'],
+        semester=int(data['semester'])
+    ).first()
+
+    if existing_batch:
+        return jsonify({'error': 'A batch with these details already exists.'}), 409
+
     new_batch = Batch(
         dept_name=data['dept_name'],
         class_number=data['class_number'],
@@ -456,5 +468,3 @@ def get_attendance_report():
         })
 
     return jsonify(report)
-
-    
