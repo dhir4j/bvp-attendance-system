@@ -1,8 +1,8 @@
 // src/app/dashboard/credits/page.tsx
 "use client"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Award, ChevronsRight, Heart } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Award, HelpCircle, Heart, UserCheck } from "lucide-react";
 
 const creditsData = {
     chief: {
@@ -10,7 +10,7 @@ const creditsData = {
         title: "Chief Attendance Manager",
         quote: "“Because even my handwriting gave up on the registers.”"
     },
-    why: "Because registers don’t auto-calculate percentages",
+    why: "Because registers are allergic to neat handwriting.",
     mentions: [
         {
             name: "Mrs. Amrita Rathod",
@@ -27,42 +27,54 @@ const creditsData = {
 
 export default function CreditsPage() {
   return (
-    <div className="flex flex-col gap-8 animate-fade-in">
+    <div className="flex flex-col gap-6 max-w-4xl mx-auto animate-fade-in">
       <div className="text-center">
         <h1 className="text-4xl font-bold font-headline text-primary animate-slide-up">For Staff Eyes Only</h1>
-        <p className="text-lg text-muted-foreground mt-2 animate-slide-up" style={{ animationDelay: '0.2s' }}>The Great Minds Behind This Website</p>
+        <p className="text-lg text-muted-foreground mt-2 animate-slide-up" style={{ animationDelay: '0.2s' }}>Click to reveal the secrets behind this website.</p>
       </div>
 
-      <Card className="animate-slide-up" style={{ animationDelay: '0.4s' }}>
-        <CardHeader className="items-center text-center">
-            <Award className="h-12 w-12 text-primary" />
-            <CardTitle className="text-2xl">{creditsData.chief.name}</CardTitle>
-            <CardDescription>{creditsData.chief.title}</CardDescription>
-        </CardHeader>
-        <CardContent>
-            <p className="text-center text-lg italic text-muted-foreground">{creditsData.chief.quote}</p>
-        </CardContent>
-      </Card>
-      
-      <Card className="animate-slide-up" style={{ animationDelay: '0.6s' }}>
-        <CardHeader>
-            <CardTitle>Why This Exists?</CardTitle>
-        </CardHeader>
-        <CardContent>
-            <p className="text-lg flex items-center gap-2">
-                <ChevronsRight className="h-5 w-5 text-primary"/>
-                {creditsData.why}
-            </p>
-        </CardContent>
-      </Card>
-      
-      <Card className="animate-slide-up" style={{ animationDelay: '0.8s' }}>
-        <CardHeader>
-            <CardTitle>Special Mentions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      <Accordion type="single" collapsible className="w-full space-y-4 animate-slide-up" style={{ animationDelay: '0.4s' }}>
+        <AccordionItem value="item-1" className="border rounded-lg bg-card shadow-lg px-4">
+          <AccordionTrigger className="text-xl hover:no-underline">
+            <div className="flex items-center gap-3">
+                <UserCheck className="h-6 w-6 text-primary" />
+                The Great Minds Behind This Website
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pt-4 text-base">
+             <div className="text-center p-4 rounded-lg">
+                <Award className="mx-auto h-12 w-12 text-primary" />
+                <h3 className="text-2xl font-bold mt-2">{creditsData.chief.name}</h3>
+                <p className="text-muted-foreground">{creditsData.chief.title}</p>
+                <blockquote className="mt-4 text-lg italic border-l-4 border-primary pl-4">
+                    {creditsData.chief.quote}
+                </blockquote>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="item-2" className="border rounded-lg bg-card shadow-lg px-4">
+          <AccordionTrigger className="text-xl hover:no-underline">
+             <div className="flex items-center gap-3">
+                <HelpCircle className="h-6 w-6 text-primary" />
+                Why This Exists?
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pt-4 text-lg text-center">
+            {creditsData.why}
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="item-3" className="border rounded-lg bg-card shadow-lg px-4">
+          <AccordionTrigger className="text-xl hover:no-underline">
+             <div className="flex items-center gap-3">
+                <Heart className="h-6 w-6 text-primary" />
+                Special Mentions
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pt-4 space-y-6">
             {creditsData.mentions.map((mention, index) => (
-                <div key={index} className="flex items-start gap-4">
+                <div key={index} className="flex items-start gap-4 p-4 rounded-lg bg-background">
                     <Heart className="h-6 w-6 text-pink-500 mt-1 flex-shrink-0"/>
                     <div>
                         <h4 className="font-semibold text-lg">{mention.name} – <span className="font-normal text-muted-foreground">{mention.title}</span></h4>
@@ -70,9 +82,9 @@ export default function CreditsPage() {
                     </div>
                 </div>
             ))}
-        </CardContent>
-      </Card>
-
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }
