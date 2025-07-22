@@ -14,6 +14,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from "@/components/ui/sidebar"
+import { ThemeToggle } from "./ThemeToggle"
 
 const staffItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -64,16 +65,19 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-             <SidebarMenuButton asChild className="bg-transparent hover:bg-destructive/20">
-                <Link href={logoutHref}>
-                    <LogOut className="h-5 w-5" />
-                    <span>Logout</span>
-                </Link>
-             </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <div className="flex items-center justify-between p-2">
+            <SidebarMenu className="flex-row gap-0.5">
+                <SidebarMenuItem>
+                    <SidebarMenuButton asChild className="bg-transparent hover:bg-destructive/20 h-8 w-auto px-3">
+                        <Link href={logoutHref}>
+                            <LogOut className="h-5 w-5" />
+                            <span className="group-data-[collapsible=icon]:hidden">Logout</span>
+                        </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+            </SidebarMenu>
+            <ThemeToggle />
+        </div>
       </SidebarFooter>
     </Sidebar>
   )

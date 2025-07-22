@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import Link from 'next/link';
+import { ThemeToggle } from '@/components/app/ThemeToggle';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -43,6 +44,9 @@ export default function AdminLoginPage() {
 
   return (
     <main className="flex min-h-screen w-full items-center justify-center bg-background p-4 animate-fade-in">
+        <div className="absolute top-4 right-4">
+            <ThemeToggle />
+        </div>
       <Card className="w-full max-w-sm shadow-2xl animate-slide-up">
         <CardHeader className="text-center">
           <UserCog className="mx-auto h-12 w-12 text-primary mb-2" />
