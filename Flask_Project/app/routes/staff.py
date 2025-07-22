@@ -220,7 +220,7 @@ def get_staff_attendance_report():
     students = batch.students
     
     # Base query for assignments for the report
-    assignments_query = Assignment.query.filter_by(batch_id=batch_id)
+    assignments_query = Assignment.query.filter_by(batch_id=batch_id, staff_id=staff_id)
     if subject_id:
         assignments_query = assignments_query.filter_by(subject_id=subject_id)
     if lecture_type:

@@ -42,6 +42,7 @@ export default function DefaultersPage() {
 
   const [selectedBatchId, setSelectedBatchId] = useState<string>("")
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
+  const [selectedLectureType, setSelectedLectureType] = useState<string>("")
   const [reportData, setReportData] = useState<AttendanceReport[]>([])
 
   const [isLoading, setIsLoading] = useState(true)
@@ -90,12 +91,15 @@ export default function DefaultersPage() {
     setReportData([])
     
     const params = new URLSearchParams({ batch_id: selectedBatchId });
-    if (selectedSubjectId) {
+    if (selectedSubjectId && selectedSubjectId !== "all") {
       params.append('subject_id', selectedSubjectId);
+    }
+    if (selectedLectureType && selectedLectureType !== "all") {
+      params.append('lecture_type', selectedLectureType);
     }
 
     try {
-      const res = await fetch(`/api/staff/defaulters?${params.toString()}`)
+      const res = await fetch(`/api/staff/attendance-report?${params.toString()}`)
       const data = await res.json()
       if (!res.ok) {
         throw new Error(data.error || "Failed to fetch attendance report")
@@ -106,14 +110,19 @@ export default function DefaultersPage() {
     } finally {
       setIsReportLoading(false)
     }
-  }, [toast, selectedBatchId, selectedSubjectId]);
+  }, [toast, selectedBatchId, selectedSubjectId, selectedLectureType]);
 
   useEffect(() => {
-    fetchReport();
-  }, [fetchReport]);
+    if (selectedBatchId) {
+        fetchReport();
+    }
+  }, [selectedBatchId, selectedSubjectId, selectedLectureType, fetchReport]);
 
   const handleBatchChange = (batchId: string) => {
     setSelectedBatchId(batchId)
+    setSelectedSubjectId("")
+    setSelectedLectureType("")
+    setReportData([])
     fetchSubjectsForBatch(batchId);
   }
 
@@ -127,7 +136,7 @@ export default function DefaultersPage() {
         <CardDescription>View students with less than 75% attendance.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
            <div className="space-y-2">
               <Label htmlFor="batch">Select Batch</Label>
               <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}>
@@ -150,12 +159,26 @@ export default function DefaultersPage() {
                   <SelectValue placeholder="All Assigned Subjects" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Subjects</SelectItem>
+                  <SelectItem value="all">All Subjects</SelectItem>
                   {subjects.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
                       {s.name}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lecture_type">Lecture Type</Label>
+              <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={!selectedBatchId}>
+                <SelectTrigger id="lecture_type">
+                  <SelectValue placeholder="All Lecture Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="TH">Theory</SelectItem>
+                  <SelectItem value="PR">Practical</SelectItem>
+                  <SelectItem value="TU">Tutorial</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -190,7 +213,7 @@ export default function DefaultersPage() {
                 ))
                 ) : (
                     <TableRow>
-                        <TableCell colSpan={5} className="text-center h-24">No defaulters found for this subject, or no attendance data recorded yet.</TableCell>
+                        <TableCell colSpan={5} className="text-center h-24">No defaulters found for this selection, or no attendance data recorded yet.</TableCell>
                     </TableRow>
                 )}
                 </TableBody>

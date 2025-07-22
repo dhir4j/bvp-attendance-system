@@ -108,11 +108,15 @@ export default function ReportPage() {
 
   useEffect(() => {
     // Fetch report whenever batch or subject changes
-    fetchReport();
-  }, [fetchReport]);
+    if (selectedBatchId) {
+        fetchReport();
+    }
+  }, [selectedBatchId, selectedSubjectId, fetchReport]);
 
   const handleBatchChange = (batchId: string) => {
     setSelectedBatchId(batchId)
+    setSelectedSubjectId("")
+    setReportData([])
     fetchSubjectsForBatch(batchId);
   }
 
@@ -146,7 +150,7 @@ export default function ReportPage() {
                 <SelectValue placeholder="All Subjects" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Subjects</SelectItem>
+                <SelectItem value="all">All Subjects</SelectItem>
                 {subjects.map((s) => (
                   <SelectItem key={s.id} value={String(s.id)}>
                     {s.name}
