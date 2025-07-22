@@ -356,10 +356,20 @@ def manage_assignments():
 @admin_bp.route('/assignments/<int:assign_id>', methods=['DELETE'])
 @admin_required
 def delete_assignment(assign_id):
-    a = Assignment.query.get_or_404(assign_id)
-    db.session.delete(a)
-    db.session.commit()
-    return jsonify({'message': 'Assignment deleted'}), 200
+    assignment = Assignment.query.get_or_404(assign_id)
+    
+    # Manually delete dependent records before deleting the assignment
+    try:
+        AttendanceRecord.query.filter_by(assignment_id=assign_id).delete()
+        TotalLectures.query.filter_by(assignment_id=assign_id).delete()
+        
+        db.session.delete(assignment)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete assignment and its related records', 'details': str(e)}), 500
+
+    return jsonify({'message': 'Assignment deleted successfully'}), 200
 
 # --- Attendance Reports ---
 @admin_bp.route('/attendance-report', methods=['GET'])
@@ -484,4 +494,5 @@ def get_staff_assignments_report():
         })
     
     return jsonify(list(staff_assignments.values()))
+    
     
