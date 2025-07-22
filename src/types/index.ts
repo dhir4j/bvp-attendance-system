@@ -69,3 +69,12 @@ export interface StaffAssignmentDetails {
 }
 
 export type StaffAssignmentsResponse = StaffAssignmentDetails[];
+
+export interface AttendanceReport {
+  student_id: number;
+  name: string;
+  roll_no: string;
+  attended_lectures: number;
+  total_lectures: number;
+  percentage: number;
+}
