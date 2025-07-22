@@ -142,7 +142,7 @@ export default function BatchesPage() {
         const errorData = await res.json();
         throw new Error(errorData.error || "Failed to fetch student details");
       }
-      const data: Batch = await res.json();
+      const data = await res.json();
       setSelectedBatchStudents(data.students || []);
       setIsViewStudentsModalOpen(true);
     } catch (error: any) {
@@ -216,7 +216,7 @@ export default function BatchesPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create New Batch</DialogTitle>
@@ -251,7 +251,7 @@ export default function BatchesPage() {
              <div className="space-y-2">
               <Label htmlFor="student_csv">Student CSV File</Label>
               <Input id="student_csv" type="file" accept=".csv" ref={fileInputRef} />
-              <p className="text-xs text-muted-foreground">CSV must have columns: roll_no, enrollment_no, name, batch_number</p>
+              <p className="text-xs text-muted-foreground">CSV must have columns: roll_no, enrollment_no, name, batch_number (optional)</p>
             </div>
           </div>
           <DialogFooter>
@@ -293,3 +293,5 @@ export default function BatchesPage() {
     </>
   )
 }
+
+    

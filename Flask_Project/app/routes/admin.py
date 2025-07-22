@@ -332,13 +332,14 @@ def manage_batches():
 def manage_single_batch(batch_id):
     batch = Batch.query.get_or_404(batch_id)
     if request.method == 'GET':
+        students = Student.query.join(student_batches).filter(student_batches.c.batch_id == batch_id).all()
         return jsonify({
             'id': batch.id,
             'dept_name': batch.dept_name,
             'class_number': batch.class_number,
             'academic_year': batch.academic_year,
             'semester': batch.semester,
-            'students': [{'id': s.id, 'name': s.name, 'roll_no': s.roll_no, 'batch_number': s.batch_number} for s in batch.students]
+            'students': [{'id': s.id, 'name': s.name, 'roll_no': s.roll_no, 'enrollment_no': s.enrollment_no, 'batch_number': s.batch_number} for s in students]
         })
 
     # DELETE
@@ -455,3 +456,5 @@ def get_attendance_report():
         })
 
     return jsonify(report)
+
+    
