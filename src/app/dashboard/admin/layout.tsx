@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Users, Book, Link2, FileBarChart } from "lucide-react"
+import { Users, Book, Link2, FileBarChart, School } from "lucide-react"
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -14,6 +14,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (pathname.startsWith("/dashboard/admin/assignments")) return "assignments"
     if (pathname.startsWith("/dashboard/admin/report")) return "report"
     if (pathname.startsWith("/dashboard/admin/batches")) return "batches"
+    if (pathname.startsWith("/dashboard/admin/departments")) return "departments"
     return "staff"
   }
   
@@ -26,9 +27,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </p>
       </div>
       <Tabs value={getTabValue()} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto sm:h-10">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto sm:h-10">
           <TabsTrigger value="staff" asChild>
             <Link href="/dashboard/admin/staff"><Users className="mr-2 h-4 w-4" />Staff</Link>
+          </TabsTrigger>
+           <TabsTrigger value="departments" asChild>
+            <Link href="/dashboard/admin/departments"><School className="mr-2 h-4 w-4" />Departments</Link>
           </TabsTrigger>
           <TabsTrigger value="subjects" asChild>
             <Link href="/dashboard/admin/subjects"><Book className="mr-2 h-4 w-4" />Subjects</Link>
