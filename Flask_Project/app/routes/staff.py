@@ -1,3 +1,4 @@
+
 from flask import Blueprint, request, jsonify, session
 from ..models import Staff, Subject, Assignment, Batch, Student, AttendanceRecord, TotalLectures
 from .. import db, bcrypt
@@ -165,17 +166,20 @@ def mark_attendance():
         ).first()
 
         if existing_record:
-            # If student was present and is still present, increment their lecture count
-            if existing_record.status == 'present' and status == 'present':
-                 existing_record.lecture_count += 1
-            # If student was absent, but is now present for this lecture, update status and set count to 1
-            elif existing_record.status == 'absent' and status == 'present':
-                existing_record.status = 'present'
-                existing_record.lecture_count = 1
-            # If student was present but now marked absent, update status. Lecture count stays from previous present records.
-            elif existing_record.status == 'present' and status == 'absent':
-                existing_record.status = 'absent'
-            # If student was absent and is still absent, do nothing.
+            if status == 'present':
+                # If they were absent, mark present and set count to 1.
+                # If they were already present, increment their count.
+                if existing_record.status == 'absent':
+                    existing_record.status = 'present'
+                    existing_record.lecture_count = 1
+                else: # was present
+                    existing_record.lecture_count += 1
+            else: # status is 'absent'
+                # If they were previously present, mark as absent.
+                # The attended lecture count remains from the earlier lecture.
+                if existing_record.status == 'present':
+                    existing_record.status = 'absent'
+                # If they were already absent, do nothing.
             
         else:
             # Create a new record if one doesn't exist
@@ -209,7 +213,6 @@ def get_staff_attendance_report():
     if not batch_id:
         return jsonify({'error': 'batch_id is required'}), 400
 
-    # Ensure the staff is assigned to this batch
     auth_query = Assignment.query.filter_by(staff_id=staff_id, batch_id=batch_id)
     if subject_id:
         auth_query = auth_query.filter_by(subject_id=subject_id)
@@ -217,51 +220,72 @@ def get_staff_attendance_report():
         return jsonify({'error': 'You are not authorized to view this report'}), 403
 
     batch = Batch.query.get_or_404(batch_id)
-    students = batch.students
     
-    # Base query for assignments for the report
-    assignments_query = Assignment.query.filter_by(batch_id=batch_id, staff_id=staff_id)
+    base_assignments_query = Assignment.query.filter_by(batch_id=batch_id, staff_id=staff_id)
     if subject_id:
-        assignments_query = assignments_query.filter_by(subject_id=subject_id)
-    if lecture_type:
-        assignments_query = assignments_query.filter_by(lecture_type=lecture_type)
+        base_assignments_query = base_assignments_query.filter_by(subject_id=subject_id)
 
-    assignments = assignments_query.all()
-    if not assignments:
-        return jsonify([])
-
-    assignment_ids = [a.id for a in assignments]
-
-    total_lectures = db.session.query(
-        db.func.sum(TotalLectures.lecture_count)
-    ).filter(
-        TotalLectures.assignment_id.in_(assignment_ids)
-    ).scalar() or 0
+    theory_assignments = base_assignments_query.filter_by(lecture_type='TH').all()
+    practical_assignments = base_assignments_query.filter(Assignment.lecture_type.in_(['PR', 'TU'])).all()
     
-    student_attendance = db.session.query(
-        AttendanceRecord.student_id,
-        db.func.sum(AttendanceRecord.lecture_count)
-    ).filter(
-        AttendanceRecord.assignment_id.in_(assignment_ids),
-        AttendanceRecord.status == 'present'
-    ).group_by(AttendanceRecord.student_id).all()
-
-    student_attendance_map = dict(student_attendance)
-
     report = []
-    for student in students:
-        attended = student_attendance_map.get(student.id, 0)
-        percentage = (attended / total_lectures * 100) if total_lectures > 0 else 0
+
+    sub_batch_students = {}
+    for s in batch.students:
+        if s.batch_number:
+            sub_batch_students.setdefault(s.batch_number, []).append(s)
+
+    for student in batch.students:
+        total_lectures = 0
+        attended_lectures = 0
+
+        # Calculate Theory attendance (applies to all students)
+        if theory_assignments and (not lecture_type or lecture_type == 'TH'):
+            th_assignment_ids = [a.id for a in theory_assignments]
+            th_total = db.session.query(db.func.sum(TotalLectures.lecture_count)).filter(TotalLectures.assignment_id.in_(th_assignment_ids)).scalar() or 0
+            th_attended = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
+                AttendanceRecord.assignment_id.in_(th_assignment_ids),
+                AttendanceRecord.student_id == student.id,
+                AttendanceRecord.status == 'present'
+            ).scalar() or 0
+            total_lectures += th_total
+            attended_lectures += th_attended
+
+        # Calculate Practical/Tutorial attendance (applies only if student is in a sub-batch)
+        if student.batch_number and practical_assignments and (not lecture_type or lecture_type in ['PR', 'TU']):
+            # Filter assignments for this student's specific sub-batch and lecture type
+            student_pr_assignments_query = base_assignments_query.filter(
+                Assignment.lecture_type.in_(['PR', 'TU']),
+                Assignment.batch_number == student.batch_number
+            )
+            if lecture_type:
+                student_pr_assignments_query = student_pr_assignments_query.filter_by(lecture_type=lecture_type)
+            
+            student_pr_assignments = student_pr_assignments_query.all()
+            
+            if student_pr_assignments:
+                pr_assignment_ids = [a.id for a in student_pr_assignments]
+                pr_total = db.session.query(db.func.sum(TotalLectures.lecture_count)).filter(TotalLectures.assignment_id.in_(pr_assignment_ids)).scalar() or 0
+                pr_attended = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
+                    AttendanceRecord.assignment_id.in_(pr_assignment_ids),
+                    AttendanceRecord.student_id == student.id,
+                    AttendanceRecord.status == 'present'
+                ).scalar() or 0
+                total_lectures += pr_total
+                attended_lectures += pr_attended
+
+        percentage = (attended_lectures / total_lectures * 100) if total_lectures > 0 else 0
         report.append({
             'student_id': student.id,
             'name': student.name,
             'roll_no': student.roll_no,
-            'attended_lectures': attended,
+            'attended_lectures': attended_lectures,
             'total_lectures': total_lectures,
             'percentage': round(percentage, 2)
         })
 
     return jsonify(report)
+
 
 @staff_bp.route('/assigned-subjects/<int:batch_id>', methods=['GET'])
 @staff_required
