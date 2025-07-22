@@ -80,6 +80,9 @@ def mark_attendance():
 
     # 3. Get the list of students for this attendance session
     batch = Batch.query.get(batch_id)
+    if not batch:
+        return jsonify({'error': 'Batch not found'}), 404
+        
     all_students_in_batch = batch.students
 
     # Filter students by specific sub-batch if batch_number is provided (for PR/TU)
@@ -91,26 +94,57 @@ def mark_attendance():
     # 4. Record attendance
     today = date.today()
 
-    # Increment total lectures count
-    total_record = AttendanceRecord(
+    # Increment total lectures count for this specific assignment
+    # Check if a 'total' record for this assignment on this day already exists
+    total_record = AttendanceRecord.query.filter_by(
         assignment_id=assignment.id,
-        student_id=-1, # Using -1 convention for total lecture entries
         date=today,
-        status='total',
-        lecture_count=1
-    )
-    db.session.add(total_record)
+        status='total'
+    ).first()
+
+    if total_record:
+        total_record.lecture_count += 1
+    else:
+        total_record = AttendanceRecord(
+            assignment_id=assignment.id,
+            student_id=-1, # Using -1 convention for total lecture entries
+            date=today,
+            status='total',
+            lecture_count=1
+        )
+        db.session.add(total_record)
 
     # Record for each student in the session
     for student in students_for_session:
         status = 'absent' if student.roll_no in absent_rolls else 'present'
-        record = AttendanceRecord(
+        
+        # Check if a record for this student, for this assignment, on this day exists
+        existing_record = AttendanceRecord.query.filter_by(
             assignment_id=assignment.id,
             student_id=student.id,
-            date=today,
-            status=status
-        )
-        db.session.add(record)
+            date=today
+        ).first()
+
+        if existing_record:
+            # If student was present but now marked absent, update status
+            if existing_record.status == 'present' and status == 'absent':
+                existing_record.status = 'absent'
+            # If student was present, increment their lecture count
+            elif existing_record.status == 'present' and status == 'present':
+                 existing_record.lecture_count += 1
+            # If student was absent, they remain absent for all lectures that day
+            
+        else:
+            # Create a new record if one doesn't exist
+            record = AttendanceRecord(
+                assignment_id=assignment.id,
+                student_id=student.id,
+                date=today,
+                status=status,
+                # if present, starts with 1 lecture, if absent, also 1 (as they missed 1)
+                lecture_count=1 
+            )
+            db.session.add(record)
 
     try:
         db.session.commit()
