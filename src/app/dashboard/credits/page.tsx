@@ -10,7 +10,7 @@ const creditsData = {
         title: "Chief Attendance Manager",
         quote: "“Because even my handwriting gave up on the registers.”"
     },
-    why: "Because registers are allergic to neat handwriting.",
+    why: "Because registers don't auto-calculate percentages",
     mentions: [
         {
             name: "Mrs. Amrita Rathod",
