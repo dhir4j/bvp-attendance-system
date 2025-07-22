@@ -421,4 +421,3 @@ def get_subjects_by_batch(batch_id):
     
     result = [{'id': s.id, 'name': f"{s.subject_name} ({s.subject_code})"} for s in subjects]
     return jsonify(result)
-```
