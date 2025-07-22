@@ -3,7 +3,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookCopy, Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building } from "lucide-react"
+import { BookCopy, Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog } from "lucide-react"
 
 import {
   Sidebar,
@@ -27,6 +27,7 @@ const adminItems = [
     { href: "/dashboard/admin/subjects", label: "Subjects", icon: Book },
     { href: "/dashboard/admin/batches", label: "Batches", icon: School2 },
     { href: "/dashboard/admin/assignments", label: "Assignments", icon: LinkIcon },
+    { href: "/dashboard/admin/staff-assignments", label: "Staff Assignments", icon: UserCog },
     { href: "/dashboard/admin/report", label: "Reports", icon: FileBarChart },
 ]
 

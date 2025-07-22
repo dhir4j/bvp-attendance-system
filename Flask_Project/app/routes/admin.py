@@ -1,4 +1,5 @@
 
+
 from flask import Blueprint, request, jsonify, session
 from sqlalchemy.exc import IntegrityError, OperationalError
 from ..models import (
@@ -438,4 +439,34 @@ def get_subjects_by_batch(batch_id):
     result = [{'id': s.id, 'name': f"{s.subject_name} ({s.subject_code})"} for s in subjects]
     return jsonify(result)
 
+@admin_bp.route('/staff-assignments', methods=['GET'])
+@admin_required
+def get_staff_assignments_report():
+    # Query all assignments with staff, subject, and batch info
+    assignments_query = db.session.query(
+        Assignment, Staff, Subject, Batch
+    ).join(Staff, Assignment.staff_id == Staff.id)\
+     .join(Subject, Assignment.subject_id == Subject.id)\
+     .join(Batch, Assignment.batch_id == Batch.id)\
+     .order_by(Staff.full_name, Subject.subject_name).all()
+
+    staff_assignments = {}
+
+    for assignment, staff, subject, batch in assignments_query:
+        if staff.id not in staff_assignments:
+            staff_assignments[staff.id] = {
+                'staff_id': staff.id,
+                'staff_name': staff.full_name,
+                'assignments': []
+            }
+        
+        staff_assignments[staff.id]['assignments'].append({
+            'id': assignment.id,
+            'subject_name': f"{subject.subject_name} ({subject.subject_code})",
+            'batch_name': f"{batch.dept_name} {batch.class_number} ({batch.academic_year} Sem {batch.semester})",
+            'lecture_type': assignment.lecture_type,
+            'batch_number': assignment.batch_number
+        })
+    
+    return jsonify(list(staff_assignments.values()))
     

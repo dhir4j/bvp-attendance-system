@@ -70,3 +70,15 @@ export interface AttendanceReport {
   total_lectures: number;
   percentage: number;
 }
+
+export interface StaffAssignmentReport {
+    staff_id: number;
+    staff_name: string;
+    assignments: {
+        id: number;
+        subject_name: string;
+        batch_name: string;
+        lecture_type: string;
+        batch_number: number | null;
+    }[];
+}
