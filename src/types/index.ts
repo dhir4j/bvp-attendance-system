@@ -82,17 +82,3 @@ export interface StaffAssignmentReport {
         batch_number: number | null;
     }[];
 }
-
-export interface Credits {
-    chief: {
-        name: string;
-        title: string;
-        quote: string;
-    },
-    why: string;
-    mentions: {
-        name: string;
-        title: string;
-        reason: string;
-    }[];
-}
