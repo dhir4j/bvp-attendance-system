@@ -13,8 +13,8 @@ import Link from 'next/link';
 export default function AdminLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [username, setUsername] = useState('bvp@admin');
-  const [password, setPassword] = useState('bvp@pass');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
