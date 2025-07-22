@@ -41,8 +41,8 @@ export default function DefaultersPage() {
   const [subjects, setSubjects] = useState<SubjectIdentifier[]>([])
 
   const [selectedBatchId, setSelectedBatchId] = useState<string>("")
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("all")
-  const [selectedLectureType, setSelectedLectureType] = useState<string>("all")
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
+  const [selectedLectureType, setSelectedLectureType] = useState<string>("")
   const [reportData, setReportData] = useState<AttendanceReport[]>([])
 
   const [isLoading, setIsLoading] = useState(true)
@@ -71,7 +71,7 @@ export default function DefaultersPage() {
     if (!batchId) return;
     setIsSubjectsLoading(true);
     setSubjects([]);
-    setSelectedSubjectId("all");
+    setSelectedSubjectId("");
     try {
       const res = await fetch(`/api/staff/subjects/by-batch/${batchId}`);
       if (!res.ok) throw new Error("Failed to fetch subjects for this batch.");
@@ -85,18 +85,16 @@ export default function DefaultersPage() {
 
 
   const fetchReport = useCallback(async () => {
-    if (!selectedBatchId) return
+    if (!selectedBatchId || !selectedSubjectId || !selectedLectureType) return
     
     setIsReportLoading(true)
     setReportData([])
     
-    const params = new URLSearchParams({ batch_id: selectedBatchId });
-    if (selectedSubjectId && selectedSubjectId !== "all") {
-      params.append('subject_id', selectedSubjectId);
-    }
-    if (selectedLectureType && selectedLectureType !== "all") {
-      params.append('lecture_type', selectedLectureType);
-    }
+    const params = new URLSearchParams({ 
+      batch_id: selectedBatchId,
+      subject_id: selectedSubjectId,
+      lecture_type: selectedLectureType
+    });
 
     try {
       const res = await fetch(`/api/staff/defaulters?${params.toString()}`)
@@ -113,15 +111,15 @@ export default function DefaultersPage() {
   }, [toast, selectedBatchId, selectedSubjectId, selectedLectureType]);
 
   useEffect(() => {
-    if (selectedBatchId) {
+    if (selectedBatchId && selectedSubjectId && selectedLectureType) {
         fetchReport();
     }
   }, [selectedBatchId, selectedSubjectId, selectedLectureType, fetchReport]);
 
   const handleBatchChange = (batchId: string) => {
     setSelectedBatchId(batchId)
-    setSelectedSubjectId("all")
-    setSelectedLectureType("all")
+    setSelectedSubjectId("")
+    setSelectedLectureType("")
     setReportData([])
     fetchSubjectsForBatch(batchId);
   }
@@ -130,7 +128,7 @@ export default function DefaultersPage() {
   const uniqueBatches = assignments ? [...new Map(assignments.map(item => [item['batch_id'], item])).values()] : [];
   
   const assignedLectureTypes = useMemo(() => {
-    if (!selectedBatchId || selectedSubjectId === 'all' || !assignments) return [];
+    if (!selectedBatchId || !selectedSubjectId || !assignments) return [];
     
     const relevantAssignment = assignments.find(a => 
       String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId
@@ -139,6 +137,7 @@ export default function DefaultersPage() {
     return relevantAssignment ? Object.keys(relevantAssignment.lecture_types) : [];
   }, [selectedBatchId, selectedSubjectId, assignments]);
 
+  const showReport = selectedBatchId && selectedSubjectId && selectedLectureType;
 
   return (
     <Card>
@@ -149,7 +148,7 @@ export default function DefaultersPage() {
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
            <div className="space-y-2">
-              <Label htmlFor="batch">Select Batch</Label>
+              <Label htmlFor="batch">1. Select Batch</Label>
               <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}>
                 <SelectTrigger id="batch">
                   <SelectValue placeholder="Select a batch..." />
@@ -164,13 +163,12 @@ export default function DefaultersPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="subject">Select Subject</Label>
+              <Label htmlFor="subject">2. Select Subject</Label>
               <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={!selectedBatchId || isSubjectsLoading}>
                 <SelectTrigger id="subject">
-                  <SelectValue placeholder="All Assigned Subjects" />
+                  <SelectValue placeholder="Select a subject..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Subjects</SelectItem>
                   {subjects.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
                       {s.name}
@@ -180,13 +178,12 @@ export default function DefaultersPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lecture_type">Lecture Type</Label>
-              <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={!selectedSubjectId || selectedSubjectId === 'all'}>
+              <Label htmlFor="lecture_type">3. Select Lecture Type</Label>
+              <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={!selectedSubjectId}>
                 <SelectTrigger id="lecture_type">
-                  <SelectValue placeholder="All Lecture Types" />
+                  <SelectValue placeholder="Select a type..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
                   {assignedLectureTypes.map(type => (
                     <SelectItem key={type} value={type}>
                       {type === 'TH' ? 'Theory' : type === 'PR' ? 'Practical' : 'Tutorial'}
@@ -197,7 +194,7 @@ export default function DefaultersPage() {
             </div>
         </div>
 
-        {selectedBatchId && (
+        {showReport ? (
             <div className="overflow-x-auto">
             <Table>
                 <TableHeader>
@@ -232,13 +229,11 @@ export default function DefaultersPage() {
                 </TableBody>
             </Table>
             </div>
-        )}
-
-        {!selectedBatchId && !isLoading && (
+        ) : (
             <Alert>
                 <UserX className="h-4 w-4" />
                 <AlertDescription>
-                    Please select a batch to view the defaulter list.
+                    Please select a batch, subject, and lecture type to view the defaulter list.
                 </AlertDescription>
             </Alert>
         )}

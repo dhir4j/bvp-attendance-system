@@ -1,9 +1,9 @@
-
+// src/components/app/AppSidebar.tsx
 "use client"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookCopy, Home, LogOut, Shield, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building } from "lucide-react"
+import { BookCopy, Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building } from "lucide-react"
 
 import {
   Sidebar,
@@ -60,19 +60,6 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
-          {!isAdminSection && (
-             <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname.startsWith("/dashboard/admin")}
-              >
-                <Link href="/dashboard/admin">
-                  <Shield className="h-5 w-5" />
-                  <span>Admin Panel</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>

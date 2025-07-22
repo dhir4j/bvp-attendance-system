@@ -1,7 +1,7 @@
 // src/app/dashboard/admin/report/page.tsx
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   Table,
   TableBody,
@@ -25,10 +25,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import type { Batch, AttendanceReport, Subject } from "@/types"
+import { Button } from "@/components/ui/button"
+import type { Batch, AttendanceReport, Subject, Student } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileBarChart } from "lucide-react"
+import { FileBarChart, Users } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+
 
 interface SubjectIdentifier {
   id: number;
@@ -40,12 +48,16 @@ export default function ReportPage() {
   const [batches, setBatches] = useState<Batch[]>([])
   const [subjects, setSubjects] = useState<SubjectIdentifier[]>([])
   const [selectedBatchId, setSelectedBatchId] = useState<string>("")
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("all")
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
+  const [selectedLectureType, setSelectedLectureType] = useState<string>("")
   const [reportData, setReportData] = useState<AttendanceReport[]>([])
   
   const [isLoading, setIsLoading] = useState(true)
   const [isSubjectsLoading, setIsSubjectsLoading] = useState(false)
   const [isReportLoading, setIsReportLoading] = useState(false)
+  
+  const [isViewStudentsModalOpen, setIsViewStudentsModalOpen] = useState(false)
+  const [selectedBatchStudents, setSelectedBatchStudents] = useState<Student[]>([]);
 
   const fetchBatches = useCallback(async () => {
     setIsLoading(true)
@@ -69,7 +81,7 @@ export default function ReportPage() {
     if (!batchId) return;
     setIsSubjectsLoading(true);
     setSubjects([]);
-    setSelectedSubjectId("all");
+    setSelectedSubjectId("");
     try {
       const res = await fetch(`/api/admin/subjects/by-batch/${batchId}`);
       if (!res.ok) throw new Error("Failed to fetch subjects for this batch.");
@@ -82,15 +94,16 @@ export default function ReportPage() {
   }, [toast]);
 
   const fetchReport = useCallback(async () => {
-    if (!selectedBatchId) return;
+    if (!selectedBatchId || !selectedSubjectId || !selectedLectureType) return;
     
     setIsReportLoading(true)
     setReportData([])
     
-    const params = new URLSearchParams({ batch_id: selectedBatchId });
-    if (selectedSubjectId && selectedSubjectId !== "all") {
-      params.append('subject_id', selectedSubjectId);
-    }
+    const params = new URLSearchParams({ 
+      batch_id: selectedBatchId,
+      subject_id: selectedSubjectId,
+      lecture_type: selectedLectureType
+    });
 
     try {
       const res = await fetch(`/api/admin/attendance-report?${params.toString()}`)
@@ -104,109 +117,177 @@ export default function ReportPage() {
     } finally {
       setIsReportLoading(false)
     }
-  }, [toast, selectedBatchId, selectedSubjectId]);
-
+  }, [toast, selectedBatchId, selectedSubjectId, selectedLectureType]);
+  
   useEffect(() => {
-    // Fetch report whenever batch or subject changes
-    if (selectedBatchId) {
+    if (selectedBatchId && selectedSubjectId && selectedLectureType) {
         fetchReport();
     }
-  }, [selectedBatchId, selectedSubjectId, fetchReport]);
+  }, [selectedBatchId, selectedSubjectId, selectedLectureType, fetchReport]);
+
 
   const handleBatchChange = (batchId: string) => {
     setSelectedBatchId(batchId)
-    setSelectedSubjectId("all")
+    setSelectedSubjectId("")
+    setSelectedLectureType("")
     setReportData([])
     fetchSubjectsForBatch(batchId);
   }
+  
+  const handleViewStudents = async () => {
+    if (!selectedBatchId) return;
+    try {
+      const res = await fetch(`/api/admin/batches/${selectedBatchId}`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to fetch student details");
+      }
+      const data = await res.json();
+      setSelectedBatchStudents(data.students || []);
+      setIsViewStudentsModalOpen(true);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    }
+  }
+
+  const showReport = selectedBatchId && selectedSubjectId && selectedLectureType;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Attendance Report</CardTitle>
-        <CardDescription>View attendance percentages by batch and subject.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="space-y-2">
-            <Label htmlFor="batch">Select Batch</Label>
-            <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}>
-              <SelectTrigger id="batch">
-                <SelectValue placeholder="Select a batch..." />
-              </SelectTrigger>
-              <SelectContent>
-                {batches.map((b) => (
-                  <SelectItem key={b.id} value={String(b.id)}>
-                    {b.dept_name} {b.class_number} ({b.academic_year} Sem {b.semester})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-           <div className="space-y-2">
-            <Label htmlFor="subject">Select Subject (Optional)</Label>
-            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={!selectedBatchId || isSubjectsLoading}>
-              <SelectTrigger id="subject">
-                <SelectValue placeholder="All Subjects" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Subjects</SelectItem>
-                {subjects.map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {selectedBatchId && (
-            <div className="overflow-x-auto">
-            <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead>Roll No</TableHead>
-                    <TableHead>Student Name</TableHead>
-                    <TableHead className="text-center">Attended</TableHead>
-                    <TableHead className="text-center">Total</TableHead>
-                    <TableHead className="text-right">Percentage</TableHead>
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {isReportLoading ? (
-                    <TableRow>
-                        <TableCell colSpan={5} className="text-center h-24">Loading report...</TableCell>
-                    </TableRow>
-                ) : reportData.length > 0 ? (
-                    reportData.map((row) => (
-                    <TableRow key={row.student_id}>
-                      <TableCell className="font-medium">{row.roll_no}</TableCell>
-                      <TableCell>{row.name}</TableCell>
-                      <TableCell className="text-center">{row.attended_lectures}</TableCell>
-                      <TableCell className="text-center">{row.total_lectures}</TableCell>
-                      <TableCell className="text-right font-bold">{row.percentage}%</TableCell>
-                    </TableRow>
-                ))
-                ) : (
-                    <TableRow>
-                        <TableCell colSpan={5} className="text-center h-24">No attendance data found for the selected filters.</TableCell>
-                    </TableRow>
-                )}
-                </TableBody>
-            </Table>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Attendance Report</CardTitle>
+              <CardDescription>View attendance percentages by batch and subject.</CardDescription>
             </div>
-        )}
+            <Button variant="outline" onClick={handleViewStudents} disabled={!selectedBatchId}>
+              <Users className="mr-2 h-4 w-4" /> View Student Roster
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="space-y-2">
+              <Label htmlFor="batch">1. Select Batch</Label>
+              <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}>
+                <SelectTrigger id="batch">
+                  <SelectValue placeholder="Select a batch..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {batches.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.dept_name} {b.class_number} ({b.academic_year} Sem {b.semester})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subject">2. Select Subject</Label>
+              <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={!selectedBatchId || isSubjectsLoading}>
+                <SelectTrigger id="subject">
+                  <SelectValue placeholder="Select a subject..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {subjects.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+             <div className="space-y-2">
+                <Label htmlFor="lecture_type">3. Select Lecture Type</Label>
+                <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={!selectedSubjectId}>
+                    <SelectTrigger id="lecture_type">
+                    <SelectValue placeholder="Select a type..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="TH">Theory</SelectItem>
+                        <SelectItem value="PR">Practical</SelectItem>
+                        <SelectItem value="TU">Tutorial</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+          </div>
 
-        {!selectedBatchId && !isLoading && (
+          {showReport ? (
+              <div className="overflow-x-auto">
+              <Table>
+                  <TableHeader>
+                  <TableRow>
+                      <TableHead>Roll No</TableHead>
+                      <TableHead>Student Name</TableHead>
+                      <TableHead className="text-center">Attended</TableHead>
+                      <TableHead className="text-center">Total</TableHead>
+                      <TableHead className="text-right">Percentage</TableHead>
+                  </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                  {isReportLoading ? (
+                      <TableRow>
+                          <TableCell colSpan={5} className="text-center h-24">Loading report...</TableCell>
+                      </TableRow>
+                  ) : reportData.length > 0 ? (
+                      reportData.map((row) => (
+                      <TableRow key={row.student_id}>
+                        <TableCell className="font-medium">{row.roll_no}</TableCell>
+                        <TableCell>{row.name}</TableCell>
+                        <TableCell className="text-center">{row.attended_lectures}</TableCell>
+                        <TableCell className="text-center">{row.total_lectures}</TableCell>
+                        <TableCell className="text-right font-bold">{row.percentage}%</TableCell>
+                      </TableRow>
+                  ))
+                  ) : (
+                      <TableRow>
+                          <TableCell colSpan={5} className="text-center h-24">No attendance data found for the selected filters.</TableCell>
+                      </TableRow>
+                  )}
+                  </TableBody>
+              </Table>
+              </div>
+          ) : (
             <Alert>
                 <FileBarChart className="h-4 w-4" />
                 <AlertDescription>
-                    Please select a batch to view its attendance report.
+                    Please select a batch, subject, and lecture type to view the attendance report.
                 </AlertDescription>
             </Alert>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </CardContent>
+      </Card>
+      
+       <Dialog open={isViewStudentsModalOpen} onOpenChange={setIsViewStudentsModalOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Students in Batch</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Roll No</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Enrollment No</TableHead>
+                        <TableHead>Batch No</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {selectedBatchStudents.map(s => (
+                        <TableRow key={s.id}>
+                            <TableCell>{s.roll_no}</TableCell>
+                            <TableCell>{s.name}</TableCell>
+                            <TableCell>{s.enrollment_no}</TableCell>
+                            <TableCell>{s.batch_number ?? 'N/A'}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

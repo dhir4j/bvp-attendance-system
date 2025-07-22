@@ -24,18 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
 import type { StaffAssignmentsResponse, AttendanceReport, Student } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileBarChart, Users } from "lucide-react"
+import { FileBarChart } from "lucide-react"
 
 interface SubjectIdentifier {
   id: number;
@@ -48,16 +41,13 @@ export default function StaffReportsPage() {
   const [subjects, setSubjects] = useState<SubjectIdentifier[]>([])
   
   const [selectedBatchId, setSelectedBatchId] = useState<string>("")
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("all")
-  const [selectedLectureType, setSelectedLectureType] = useState<string>("all")
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("")
+  const [selectedLectureType, setSelectedLectureType] = useState<string>("")
   const [reportData, setReportData] = useState<AttendanceReport[]>([])
   
   const [isLoading, setIsLoading] = useState(true)
   const [isSubjectsLoading, setIsSubjectsLoading] = useState(false)
   const [isReportLoading, setIsReportLoading] = useState(false)
-  
-  const [isViewStudentsModalOpen, setIsViewStudentsModalOpen] = useState(false)
-  const [selectedBatchStudents, setSelectedBatchStudents] = useState<Student[]>([]);
 
   const fetchAssignments = useCallback(async () => {
     setIsLoading(true);
@@ -81,7 +71,7 @@ export default function StaffReportsPage() {
     if (!batchId) return;
     setIsSubjectsLoading(true);
     setSubjects([]);
-    setSelectedSubjectId("all");
+    setSelectedSubjectId("");
     try {
       const res = await fetch(`/api/staff/subjects/by-batch/${batchId}`);
       if (!res.ok) throw new Error("Failed to fetch subjects for this batch.");
@@ -94,18 +84,16 @@ export default function StaffReportsPage() {
   }, [toast]);
 
   const fetchReport = useCallback(async () => {
-    if (!selectedBatchId) return;
+    if (!selectedBatchId || !selectedSubjectId || !selectedLectureType) return;
 
     setIsReportLoading(true);
     setReportData([]);
     
-    const params = new URLSearchParams({ batch_id: selectedBatchId });
-    if (selectedSubjectId && selectedSubjectId !== 'all') {
-      params.append('subject_id', selectedSubjectId);
-    }
-    if (selectedLectureType && selectedLectureType !== 'all') {
-      params.append('lecture_type', selectedLectureType);
-    }
+    const params = new URLSearchParams({ 
+        batch_id: selectedBatchId,
+        subject_id: selectedSubjectId,
+        lecture_type: selectedLectureType
+    });
 
     try {
       const res = await fetch(`/api/staff/reports?${params.toString()}`);
@@ -120,39 +108,23 @@ export default function StaffReportsPage() {
   }, [selectedBatchId, selectedSubjectId, selectedLectureType, toast]);
 
   useEffect(() => {
-     if (selectedBatchId) {
+     if (selectedBatchId && selectedSubjectId && selectedLectureType) {
         fetchReport();
     }
   }, [fetchReport, selectedBatchId, selectedSubjectId, selectedLectureType]);
 
   const handleBatchChange = (batchId: string) => {
     setSelectedBatchId(batchId);
+    setSelectedSubjectId("");
+    setSelectedLectureType("");
+    setReportData([]);
     fetchSubjectsForBatch(batchId);
   };
   
-  const handleViewStudents = async () => {
-    if (!selectedBatchId) return;
-    try {
-      // Note: Using the admin route here is acceptable for GETting public batch info
-      // if the backend auth for this specific route allows it.
-      // A dedicated staff route would be cleaner for stricter role separation.
-      const res = await fetch(`/api/admin/batches/${selectedBatchId}`);
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to fetch student details");
-      }
-      const data = await res.json();
-      setSelectedBatchStudents(data.students || []);
-      setIsViewStudentsModalOpen(true);
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    }
-  }
-
   const uniqueBatches = assignments ? [...new Map(assignments.map(item => [item['batch_id'], item])).values()] : [];
   
   const assignedLectureTypes = useMemo(() => {
-    if (!selectedBatchId || selectedSubjectId === 'all' || !assignments) return [];
+    if (!selectedBatchId || !selectedSubjectId || !assignments) return [];
     
     const relevantAssignment = assignments.find(a => 
       String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId
@@ -160,26 +132,22 @@ export default function StaffReportsPage() {
     
     return relevantAssignment ? Object.keys(relevantAssignment.lecture_types) : [];
   }, [selectedBatchId, selectedSubjectId, assignments]);
-
+  
+  const showReport = selectedBatchId && selectedSubjectId && selectedLectureType;
 
   return (
     <>
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
             <div>
               <CardTitle>Attendance Report</CardTitle>
               <CardDescription>View detailed attendance for your assigned subjects.</CardDescription>
             </div>
-            <Button variant="outline" onClick={handleViewStudents} disabled={!selectedBatchId}>
-              <Users className="mr-2 h-4 w-4" /> View Student Roster
-            </Button>
-          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="space-y-2">
-              <Label htmlFor="batch">Select Batch</Label>
+              <Label htmlFor="batch">1. Select Batch</Label>
               <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}>
                 <SelectTrigger id="batch">
                   <SelectValue placeholder="Select from your assignments..." />
@@ -194,13 +162,12 @@ export default function StaffReportsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="subject">Select Subject</Label>
+              <Label htmlFor="subject">2. Select Subject</Label>
               <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={!selectedBatchId || isSubjectsLoading}>
                 <SelectTrigger id="subject">
-                  <SelectValue placeholder="All Your Assigned Subjects" />
+                  <SelectValue placeholder="Select a subject..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Your Assigned Subjects</SelectItem>
                   {subjects.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
                       {s.name}
@@ -210,13 +177,12 @@ export default function StaffReportsPage() {
               </Select>
             </div>
              <div className="space-y-2">
-              <Label htmlFor="lecture_type">Lecture Type</Label>
-              <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={!selectedSubjectId || selectedSubjectId === 'all'}>
+              <Label htmlFor="lecture_type">3. Select Lecture Type</Label>
+              <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={!selectedSubjectId}>
                 <SelectTrigger id="lecture_type">
-                  <SelectValue placeholder="All Lecture Types" />
+                  <SelectValue placeholder="Select a type..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
                    {assignedLectureTypes.map(type => (
                     <SelectItem key={type} value={type}>
                       {type === 'TH' ? 'Theory' : type === 'PR' ? 'Practical' : 'Tutorial'}
@@ -227,7 +193,7 @@ export default function StaffReportsPage() {
             </div>
           </div>
 
-          {selectedBatchId && (
+          {showReport ? (
               <div className="overflow-x-auto">
               <Table>
                   <TableHeader>
@@ -262,48 +228,16 @@ export default function StaffReportsPage() {
                   </TableBody>
               </Table>
               </div>
-          )}
-
-          {!selectedBatchId && !isLoading && (
-              <Alert>
-                  <FileBarChart className="h-4 w-4" />
-                  <AlertDescription>
-                      Please select a batch to view its attendance report.
-                  </AlertDescription>
-              </Alert>
+          ) : (
+            <Alert>
+                <FileBarChart className="h-4 w-4" />
+                <AlertDescription>
+                    Please select a batch, subject, and lecture type to view the attendance report.
+                </AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>
-
-      <Dialog open={isViewStudentsModalOpen} onOpenChange={setIsViewStudentsModalOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Students in Batch</DialogTitle>
-          </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Roll No</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Enrollment No</TableHead>
-                        <TableHead>Batch No</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {selectedBatchStudents.map(s => (
-                        <TableRow key={s.id}>
-                            <TableCell>{s.roll_no}</TableCell>
-                            <TableCell>{s.name}</TableCell>
-                            <TableCell>{s.enrollment_no}</TableCell>
-                            <TableCell>{s.batch_number ?? 'N/A'}</TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }
