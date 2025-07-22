@@ -4,7 +4,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog } from "lucide-react"
+import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog, Award } from "lucide-react"
 
 import {
   Sidebar,
@@ -21,6 +21,7 @@ const staffItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/dashboard/reports", label: "Reports", icon: FileBarChart },
     { href: "/dashboard/defaulters", label: "Defaulters", icon: UserX },
+    { href: "/dashboard/credits", label: "Credits", icon: Award },
 ]
 
 const adminItems = [
@@ -54,7 +55,7 @@ export function AppSidebar() {
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
                 asChild
-                isActive={pathname.startsWith(item.href) && (item.href !== '/dashboard' || pathname === '/dashboard')}
+                isActive={pathname === item.href}
               >
                 <Link href={item.href}>
                   <item.icon className="h-5 w-5" />
