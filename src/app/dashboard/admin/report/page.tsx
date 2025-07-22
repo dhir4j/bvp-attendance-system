@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button"
 import type { Batch, AttendanceReport, Subject, Student } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileBarChart, Users } from "lucide-react"
+import { FileBarChart, Users, FileDown } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -150,20 +150,46 @@ export default function ReportPage() {
     }
   }
 
+  const handleExportCSV = () => {
+    if (reportData.length === 0) {
+      toast({ variant: "destructive", title: "Error", description: "No data to export." });
+      return;
+    }
+
+    const headers = "Roll No,Student Name,Attended Lectures,Total Lectures,Percentage\n";
+    const csvContent = reportData.map(row => 
+      `${row.roll_no},"${row.name}",${row.attended_lectures},${row.total_lectures},${row.percentage}`
+    ).join("\n");
+
+    const blob = new Blob([headers + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `attendance-report-${selectedBatchId}-${selectedSubjectId}-${selectedLectureType}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const showReport = selectedBatchId && selectedSubjectId && selectedLectureType;
 
   return (
     <>
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <CardTitle>Attendance Report</CardTitle>
               <CardDescription>View attendance percentages by batch and subject.</CardDescription>
             </div>
-            <Button variant="outline" onClick={handleViewStudents} disabled={!selectedBatchId}>
-              <Users className="mr-2 h-4 w-4" /> View Student Roster
-            </Button>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button variant="outline" onClick={handleViewStudents} disabled={!selectedBatchId}>
+                <Users className="mr-2 h-4 w-4" /> View Student Roster
+              </Button>
+               <Button variant="outline" onClick={handleExportCSV} disabled={!showReport || reportData.length === 0}>
+                <FileDown className="mr-2 h-4 w-4" /> Export CSV
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

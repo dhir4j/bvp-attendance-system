@@ -25,10 +25,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
 import type { StaffAssignmentsResponse, AttendanceReport } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { UserX } from "lucide-react"
+import { UserX, FileDown } from "lucide-react"
 
 interface SubjectIdentifier {
   id: number;
@@ -139,11 +140,39 @@ export default function DefaultersPage() {
 
   const showReport = selectedBatchId && selectedSubjectId && selectedLectureType;
 
+  const handleExportCSV = () => {
+    if (defaulters.length === 0) {
+      toast({ variant: "destructive", title: "Error", description: "No defaulters to export." });
+      return;
+    }
+
+    const headers = "Roll No,Student Name,Attended Lectures,Total Lectures,Percentage\n";
+    const csvContent = defaulters.map(row => 
+      `${row.roll_no},"${row.name}",${row.attended_lectures},${row.total_lectures},${row.percentage}`
+    ).join("\n");
+
+    const blob = new Blob([headers + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `defaulter-list-${selectedBatchId}-${selectedSubjectId}-${selectedLectureType}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Defaulter List</CardTitle>
-        <CardDescription>View students with less than 75% attendance.</CardDescription>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <CardTitle>Defaulter List</CardTitle>
+            <CardDescription>View students with less than 75% attendance.</CardDescription>
+          </div>
+          <Button variant="outline" onClick={handleExportCSV} disabled={!showReport || defaulters.length === 0}>
+            <FileDown className="mr-2 h-4 w-4" /> Export CSV
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
