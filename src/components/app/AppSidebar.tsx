@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookCopy, Home, LogOut, Shield } from "lucide-react"
+import { BookCopy, Home, LogOut, Shield, UserX } from "lucide-react"
 
 import {
   Sidebar,
@@ -19,7 +19,7 @@ export function AppSidebar() {
 
   const menuItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
-    // { href: "/dashboard/defaulters", label: "Defaulters", icon: UserX },
+    { href: "/dashboard/defaulters", label: "Defaulters", icon: UserX },
     { href: "/dashboard/admin", label: "Admin Panel", icon: Shield },
   ]
 

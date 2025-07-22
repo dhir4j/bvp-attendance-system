@@ -65,6 +65,10 @@ class Assignment(db.Model):
     lecture_type   = db.Column(db.String, nullable=False) # TH, PR, TU
     batch_number   = db.Column(db.Integer, nullable=True) # For PR/TU batches (1, 2, 3)
 
+    # Define relationship to get batch directly from assignment
+    batch = relationship("Batch")
+
+
 class AttendanceRecord(db.Model):
     __tablename__ = 'attendance_records'
     id           = db.Column(db.Integer, primary_key=True)

@@ -3,16 +3,18 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle, Users, X } from "lucide-react"
+import { AlertCircle, CheckCircle, Users, X, Loader2 } from "lucide-react"
 
-import type { StaffAssignmentDetails } from "@/types"
+import type { StaffAssignmentDetails, Student } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { Label } from "../ui/label"
+import { Alert, AlertTitle } from "../ui/alert"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
 
 interface AttendanceSheetProps {
   assignment: StaffAssignmentDetails;
@@ -25,15 +27,18 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
   const [lectureType, setLectureType] = useState<string>("")
   const [batchNumber, setBatchNumber] = useState<string>("")
   const [absentRolls, setAbsentRolls] = useState("")
+  
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [reviewData, setReviewData] = useState<{ valid_absentees: Student[], invalid_rolls: string[] } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   
   const lectureTypes = Object.keys(assignment.lecture_types);
   const batchesForType = lectureType ? assignment.lecture_types[lectureType] : [];
-  // Show batch selector only for PR/TU and if there are sub-batches defined
   const showBatchSelector = lectureType !== 'TH' && batchesForType && batchesForType.length > 0 && batchesForType[0] !== null;
 
-  const handleSubmit = async () => {
+  const handleReview = async () => {
     if(!lectureType) {
         toast({ variant: "destructive", title: "Error", description: "Please select a lecture type."});
         return;
@@ -43,17 +48,47 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
         toast({ variant: "destructive", title: "Error", description: "Please select a sub-batch for this lecture type."});
         return;
     }
-    
-    setIsLoading(true);
 
-    const absent_rolls = absentRolls.split(/[\s,]+/).filter(Boolean);
+    const absent_rolls_list = absentRolls.split(/[\s,]+/).filter(Boolean);
+    if(absent_rolls_list.length === 0) {
+        toast({ title: "No Absentees", description: "You have not entered any absent roll numbers. All students will be marked present."});
+    }
+
+    setIsReviewing(true);
+    setReviewData(null);
+
+    const body = {
+        batch_id: assignment.batch_id,
+        batch_number: showBatchSelector ? parseInt(batchNumber) : null,
+        absent_rolls: absent_rolls_list
+    }
+
+    try {
+        const res = await fetch("/api/staff/attendance/validate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if(!res.ok) throw new Error(data.error || "Failed to validate absentees");
+        setReviewData(data);
+    } catch(error: any) {
+        toast({ variant: "destructive", title: "Error", description: error.message });
+        setReviewData(null);
+    } finally {
+        setIsReviewing(false);
+    }
+  }
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
 
     const body = {
         subject_id: assignment.subject_id,
         batch_id: assignment.batch_id,
         lecture_type: lectureType,
         batch_number: showBatchSelector ? parseInt(batchNumber) : null,
-        absent_rolls
+        absent_rolls: reviewData?.valid_absentees.map(s => s.roll_no) || []
     }
 
     try {
@@ -67,15 +102,16 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
         if(!res.ok) {
             throw new Error(resData.error || "Failed to submit attendance");
         }
+        setReviewData(null);
         setShowSuccessDialog(true);
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message});
     } finally {
-        setIsLoading(false);
+        setIsSubmitting(false);
     }
   }
 
-  const handleDialogClose = () => {
+  const handleSuccessDialogClose = () => {
     setShowSuccessDialog(false);
     router.push('/dashboard');
   }
@@ -90,7 +126,7 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Session Details</CardTitle>
+            <CardTitle>1. Session Details</CardTitle>
             <CardDescription>Select the lecture type and sub-batch (if applicable).</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 md:grid-cols-2">
@@ -131,7 +167,7 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Mark Absentees</CardTitle>
+            <CardTitle>2. Mark Absentees</CardTitle>
             <CardDescription>Enter the roll numbers of all absent students, separated by commas or spaces.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -151,24 +187,77 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
 
       <div className="sticky bottom-0 left-0 right-0 mt-6 bg-card/80 backdrop-blur-sm border-t p-4 shadow-lg">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Users className="h-6 w-6 text-muted-foreground" />
-            <span className="font-medium">{absentRolls.split(/[\s,]+/).filter(Boolean).length}</span>
-            <span className="text-muted-foreground">student(s) marked absent</span>
-          </div>
-          <div className="flex gap-4">
+          <div>
             <Button variant="outline" onClick={() => router.back()}>
               <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isLoading || !lectureType || (showBatchSelector && !batchNumber)}>
-              {isLoading ? 'Submitting...' : 'Submit Attendance'}
+          </div>
+          <div className="flex gap-4">
+            <Button onClick={handleReview} disabled={isReviewing || !lectureType || (showBatchSelector && !batchNumber)}>
+              {isReviewing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Review Absentees
             </Button>
           </div>
         </div>
       </div>
 
-      <Dialog open={showSuccessDialog} onOpenChange={handleDialogClose}>
+      {/* Confirmation Dialog */}
+       <Dialog open={!!reviewData} onOpenChange={(isOpen) => !isOpen && setReviewData(null)}>
+        <DialogContent className="max-w-4xl">
+            <DialogHeader>
+                <DialogTitle>Confirm Attendance Submission</DialogTitle>
+                <DialogDescription>Please review the list of absentees before final submission.</DialogDescription>
+            </DialogHeader>
+            {reviewData?.invalid_rolls && reviewData.invalid_rolls.length > 0 && (
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Warning: Invalid Roll Numbers</AlertTitle>
+                    <p className="text-sm">
+                        The following roll numbers were not found in this batch and will be ignored: 
+                        <span className="font-mono p-1 bg-destructive/20 rounded ml-1">{reviewData.invalid_rolls.join(", ")}</span>
+                    </p>
+                </Alert>
+            )}
+            <div className="max-h-[50vh] overflow-y-auto my-4">
+                <h4 className="font-semibold mb-2">Students to be Marked Absent: {reviewData?.valid_absentees.length ?? 0}</h4>
+                {reviewData?.valid_absentees && reviewData.valid_absentees.length > 0 ? (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Roll No</TableHead>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Enrollment No</TableHead>
+                                <TableHead>Batch No.</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {reviewData.valid_absentees.map(s => (
+                                <TableRow key={s.id}>
+                                    <TableCell>{s.roll_no}</TableCell>
+                                    <TableCell>{s.name}</TableCell>
+                                    <TableCell>{s.enrollment_no}</TableCell>
+                                    <TableCell>{s.batch_number ?? "N/A"}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                ) : (
+                    <p className="text-muted-foreground text-center py-8">No valid roll numbers entered. All students will be marked as present.</p>
+                )}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setReviewData(null)}>Back to Edit</Button>
+                <Button onClick={handleSubmit} disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Confirm and Submit
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+       </Dialog>
+
+      {/* Success Dialog */}
+      <Dialog open={showSuccessDialog} onOpenChange={handleSuccessDialogClose}>
         <DialogContent className="sm:max-w-md text-center p-8">
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
                 <CheckCircle className="h-12 w-12 text-green-600" />
@@ -177,7 +266,7 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
             <p className="mt-2 text-muted-foreground">
                 Attendance has been successfully saved.
             </p>
-            <Button onClick={handleDialogClose} className="mt-6 w-full">
+            <Button onClick={handleSuccessDialogClose} className="mt-6 w-full">
                 Done
             </Button>
         </DialogContent>

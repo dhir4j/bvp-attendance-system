@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, session
 from sqlalchemy.exc import IntegrityError, OperationalError
 from ..models import (
     Staff, Subject, Assignment, Department,
-    Batch, Student, student_batches, TotalLectures
+    Batch, Student, student_batches, TotalLectures, AttendanceRecord
 )
 from .. import db, bcrypt
 from ..auth import admin_required

@@ -3,6 +3,8 @@ from ..models import Staff, Subject, Assignment, Batch, Student, AttendanceRecor
 from .. import db, bcrypt
 from ..auth import staff_required
 from datetime import date
+from sqlalchemy.orm import joinedload
+
 
 staff_bp = Blueprint('staff', __name__)
 
@@ -45,6 +47,47 @@ def get_assignments():
              lecture_type_entry.append(a.batch_number)
 
     return jsonify(list(out.values()))
+
+@staff_bp.route('/attendance/validate-absentees', methods=['POST'])
+@staff_required
+def validate_absentees():
+    data = request.json
+    batch_id = data.get('batch_id')
+    batch_number = data.get('batch_number') # For PR/TU
+    absent_rolls = [r.strip() for r in data.get('absent_rolls', [])]
+
+    batch = Batch.query.get(batch_id)
+    if not batch:
+        return jsonify({'error': 'Batch not found'}), 404
+    
+    # Get all students for this specific session
+    if batch_number:
+        students_for_session = [s for s in batch.students if s.batch_number == batch_number]
+    else:
+        students_for_session = batch.students
+        
+    student_roll_map = {s.roll_no: s for s in students_for_session}
+    
+    valid_absentees = []
+    invalid_rolls = []
+    
+    for roll in absent_rolls:
+        if roll in student_roll_map:
+            student = student_roll_map[roll]
+            valid_absentees.append({
+                'id': student.id,
+                'name': student.name,
+                'roll_no': student.roll_no,
+                'enrollment_no': student.enrollment_no,
+                'batch_number': student.batch_number
+            })
+        else:
+            invalid_rolls.append(roll)
+            
+    return jsonify({
+        'valid_absentees': valid_absentees,
+        'invalid_rolls': invalid_rolls
+    })
 
 
 @staff_bp.route('/mark-attendance', methods=['POST'])
@@ -149,3 +192,61 @@ def mark_attendance():
         return jsonify({'error': 'Failed to save attendance', 'details': str(e)}), 500
 
     return jsonify({'message': 'Attendance marked successfully'})
+
+
+@staff_bp.route('/attendance-report', methods=['GET'])
+@staff_required
+def get_staff_attendance_report():
+    staff_id = session['staff_id']
+    batch_id = request.args.get('batch_id')
+
+    if not batch_id:
+        return jsonify({'error': 'batch_id is required'}), 400
+
+    # Ensure the staff is assigned to this batch
+    assignment_check = Assignment.query.filter_by(staff_id=staff_id, batch_id=batch_id).first()
+    if not assignment_check:
+        return jsonify({'error': 'You are not authorized to view this report'}), 403
+
+    # Use the same logic as the admin report
+    batch = Batch.query.get_or_404(batch_id)
+    students = batch.students
+    
+    # Only get assignments for this batch (all subjects/types)
+    assignments = Assignment.query.filter_by(batch_id=batch_id).all()
+    assignment_ids = [a.id for a in assignments]
+
+    total_lectures_query = db.session.query(
+        TotalLectures.assignment_id,
+        db.func.sum(TotalLectures.lecture_count)
+    ).filter(
+        TotalLectures.assignment_id.in_(assignment_ids)
+    ).group_by(TotalLectures.assignment_id).all()
+    
+    total_lectures_map = dict(total_lectures_query)
+    total_batch_lectures = sum(total_lectures_map.values())
+
+    student_attendance = db.session.query(
+        AttendanceRecord.student_id,
+        db.func.sum(AttendanceRecord.lecture_count)
+    ).filter(
+        AttendanceRecord.assignment_id.in_(assignment_ids),
+        AttendanceRecord.status == 'present'
+    ).group_by(AttendanceRecord.student_id).all()
+
+    student_attendance_map = dict(student_attendance)
+
+    report = []
+    for student in students:
+        attended = student_attendance_map.get(student.id, 0)
+        percentage = (attended / total_batch_lectures * 100) if total_batch_lectures > 0 else 0
+        report.append({
+            'student_id': student.id,
+            'name': student.name,
+            'roll_no': student.roll_no,
+            'attended_lectures': attended,
+            'total_lectures': total_batch_lectures,
+            'percentage': round(percentage, 2)
+        })
+
+    return jsonify(report)
