@@ -277,6 +277,7 @@ def manage_batches():
         } for b in batches]
         return jsonify(result)
 
+    # POST
     data = request.form
     new_batch = Batch(
         dept_name=data['dept_name'],
@@ -285,7 +286,7 @@ def manage_batches():
         semester=int(data['semester'])
     )
     db.session.add(new_batch)
-    db.session.commit()
+    db.session.commit() # Commit to get the new_batch.id
 
     if 'student_csv' in request.files:
         file = request.files['student_csv']
@@ -301,10 +302,12 @@ def manage_batches():
                         name=row['name']
                     )
                     db.session.add(student)
+                # Associate student with the batch
                 new_batch.students.append(student)
             db.session.commit()
 
     return jsonify({'message': 'Batch created', 'id': new_batch.id}), 201
+
 
 @admin_bp.route('/batches/<int:batch_id>', methods=['GET', 'DELETE'])
 @admin_required
@@ -320,6 +323,8 @@ def manage_single_batch(batch_id):
             'students': [{'id': s.id, 'name': s.name, 'roll_no': s.roll_no} for s in batch.students]
         })
 
+    # DELETE
+    # This will also delete associations in student_batches due to cascade settings
     db.session.delete(batch)
     db.session.commit()
     return jsonify({'message': 'Batch deleted'})
@@ -364,3 +369,5 @@ def delete_assignment(assign_id):
     db.session.delete(a)
     db.session.commit()
     return jsonify({'message': 'Assignment deleted'}), 200
+
+    
