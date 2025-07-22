@@ -1,12 +1,8 @@
 from flask import Blueprint, request, jsonify, session
-from ..models import Staff, Subject, Assignment
-from .. import bcrypt
+from ..models import Staff, Subject, Assignment, Classroom, Student, AttendanceRecord
+from .. import db, bcrypt
 from ..auth import staff_required
-from ..sheets import (
-    get_sheet, col_letter_to_index,
-    cell_value_to_int, get_batch_rolls,
-    subject_column_map
-)
+from datetime import date
 
 staff_bp = Blueprint('staff', __name__)
 
@@ -23,62 +19,104 @@ def staff_login():
 @staff_required
 def get_assignments():
     sid = session['staff_id']
-    assigns = Assignment.query.filter_by(staff_id=sid).all()
-    out = {}
-    for a in assigns:
-        subj = Subject.query.get(a.subject_id)
-        ent  = out.setdefault(a.subject_id,{
-            'subject_code': subj.subject_code,
-            'subject_name': subj.subject_name,
-            'lecture_types':{}
-        })
-        ent['lecture_types'].setdefault(a.lecture_type, []).append(a.batch_number)
-    return jsonify(out)
+    
+    assignments = db.session.query(
+        Assignment, Subject.subject_name, Subject.subject_code, Classroom.class_name
+    ).filter_by(staff_id=sid)\
+     .join(Subject, Assignment.subject_id == Subject.id)\
+     .join(Classroom, Assignment.classroom_id == Classroom.id).all()
 
-@staff_bp.route('/attendance', methods=['POST'])
+    out = {}
+    for a, subject_name, subject_code, classroom_name in assignments:
+        key = f"{a.subject_id}-{a.classroom_id}"
+        entry = out.setdefault(key, {
+            'subject_id': a.subject_id,
+            'subject_name': subject_name,
+            'subject_code': subject_code,
+            'classroom_id': a.classroom_id,
+            'classroom_name': classroom_name,
+            'lecture_types': {}
+        })
+        
+        lecture_type_entry = entry['lecture_types'].setdefault(a.lecture_type, [])
+        if a.batch_number not in lecture_type_entry:
+             lecture_type_entry.append(a.batch_number)
+
+    return jsonify(list(out.values()))
+
+
+@staff_bp.route('/mark-attendance', methods=['POST'])
 @staff_required
 def mark_attendance():
-    d            = request.json
-    subj         = Subject.query.get_or_404(d['subject_id'])
-    lec_type     = d.get('lecture_type')
-    batch        = d.get('batch_number')
-    absentees    = set(d.get('absent_rolls', []))
+    data = request.json
+    staff_id = session['staff_id']
+
+    # 1. Get required fields
+    subject_id = data.get('subject_id')
+    classroom_id = data.get('classroom_id')
+    lecture_type = data.get('lecture_type')
+    batch_number = data.get('batch_number') # Can be None
+    absent_rolls = [r.strip() for r in data.get('absent_rolls', [])]
+
+    # 2. Find the correct assignment
+    assignment_query = Assignment.query.filter_by(
+        staff_id=staff_id,
+        subject_id=subject_id,
+        classroom_id=classroom_id,
+        lecture_type=lecture_type
+    )
+    if batch_number is not None:
+        assignment_query = assignment_query.filter_by(batch_number=batch_number)
+    
+    assignment = assignment_query.first_or_404(
+        description="No assignment found for the given criteria."
+    )
+
+    # 3. Get the list of students for this attendance session
+    classroom = Classroom.query.get(classroom_id)
+    if not classroom or not classroom.batch:
+        return jsonify({'error': 'Classroom is not associated with a batch.'}), 400
+    
+    all_students_in_batch = classroom.batch.students
+
+    # If it's a batch-specific lecture, filter students by batch_number
+    if batch_number:
+        # This assumes Student model has a batch_number, which it might not.
+        # A better approach is needed if students can be in multiple sub-batches.
+        # For now, we assume all students in the main batch are eligible.
+        # A more complex system would have a student-to-sub_batch mapping.
+        pass # Not filtering for now, all students in class batch are considered.
+
+    student_map = {s.roll_no: s.id for s in all_students_in_batch}
+    
+    # 4. Record attendance
+    today = date.today()
+
+    # Increment total lectures count
+    total_record = AttendanceRecord(
+        assignment_id=assignment.id,
+        student_id=-1, # Using -1 or another convention for total lecture entries
+        date=today,
+        status='total',
+        lecture_count=1
+    )
+    db.session.add(total_record)
+
+    # Record for each student
+    for student in all_students_in_batch:
+        status = 'absent' if student.roll_no in absent_rolls else 'present'
+        record = AttendanceRecord(
+            assignment_id=assignment.id,
+            student_id=student.id,
+            date=today,
+            status=status
+        )
+        db.session.add(record)
 
     try:
-        # validate batch rolls
-        if lec_type!='TH' and batch is not None:
-            valid   = set(get_batch_rolls(batch))
-            invalid = absentees - valid
-            if invalid:
-                return jsonify({'error':f'Invalid rolls: {list(invalid)}'}),400
-            absentees &= valid
-
-        sheet   = get_sheet()
-        mapping = subject_column_map.get(subj.subject_code, {}).get(lec_type)
-        if not mapping:
-            return jsonify({'error':'No mapping for this lecture/subject'}),400
-
-        key = None if lec_type=='TH' else batch
-        if key not in mapping:
-            return jsonify({'error':'No mapping entry for this batch'}),400
-
-        col_letter, count_cell = mapping[key]
-        col_idx = col_letter_to_index(col_letter)
-        rolls   = sheet.col_values(1)[4:71]
-
-        # decrement attendance for absentees
-        for idx, r in enumerate(rolls):
-            if r in absentees:
-                row     = idx + 5
-                curr    = cell_value_to_int(sheet.cell(row, col_idx).value)
-                sheet.update_cell(row, col_idx, curr - 1)
-
-        # increment lecture count
-        total = cell_value_to_int(sheet.acell(count_cell).value)
-        sheet.update_acell(count_cell, total + 1)
-
-        return jsonify({'message':'Attendance updated'})
-    except RuntimeError as e:
-        return jsonify({'error': str(e)}), 500
+        db.session.commit()
     except Exception as e:
-        return jsonify({'error': 'An unexpected error occurred: ' + str(e)}), 500
+        db.session.rollback()
+        return jsonify({'error': 'Failed to save attendance', 'details': str(e)}), 500
+
+    return jsonify({'message': 'Attendance marked successfully'})

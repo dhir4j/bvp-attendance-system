@@ -144,12 +144,20 @@ def update_delete_department(dept_code):
 @admin_required
 def manage_classrooms():
     if request.method == 'GET':
-        result = [{
-            'id': c.id,
-            'dept_code': c.dept_code,
-            'class_name': c.class_name,
-            'batch_id': c.batch_id
-        } for c in Classroom.query.all()]
+        classrooms = Classroom.query.order_by(Classroom.class_name).all()
+        result = []
+        for c in classrooms:
+            batch_info = "N/A"
+            if c.batch:
+                batch_info = f"{c.batch.dept_name} ({c.batch.academic_year}) Sem {c.batch.semester}"
+            
+            result.append({
+                'id': c.id,
+                'dept_code': c.dept_code,
+                'class_name': c.class_name,
+                'batch_id': c.batch_id,
+                'batch_info': batch_info
+            })
         return jsonify(result), 200
 
     # POST → create new classroom
@@ -335,15 +343,25 @@ def manage_single_batch(batch_id):
 @admin_required
 def manage_assignments():
     if request.method == 'GET':
-        assignments = Assignment.query.all()
-        result = [{
-            'id': a.id,
-            'staff_id': a.staff_id,
-            'subject_id': a.subject_id,
-            'classroom_id': a.classroom_id,
-            'lecture_type': a.lecture_type,
-            'batch_number': a.batch_number,
-        } for a in assignments]
+        assignments = db.session.query(
+            Assignment, Staff.full_name, Subject.subject_name, Subject.subject_code, Classroom.class_name
+        ).join(Staff, Assignment.staff_id == Staff.id)\
+         .join(Subject, Assignment.subject_id == Subject.id)\
+         .join(Classroom, Assignment.classroom_id == Classroom.id).all()
+
+        result = []
+        for a, staff_name, subject_name, subject_code, classroom_name in assignments:
+            result.append({
+                'id': a.id,
+                'staff_id': a.staff_id,
+                'staff_name': staff_name,
+                'subject_id': a.subject_id,
+                'subject_name': f"{subject_name} ({subject_code})",
+                'classroom_id': a.classroom_id,
+                'classroom_name': classroom_name,
+                'lecture_type': a.lecture_type,
+                'batch_number': a.batch_number,
+            })
         return jsonify(result), 200
 
     data = request.json or {}
@@ -370,4 +388,60 @@ def delete_assignment(assign_id):
     db.session.commit()
     return jsonify({'message': 'Assignment deleted'}), 200
 
+# --- Attendance Reports ---
+@admin_bp.route('/attendance-report', methods=['GET'])
+@admin_required
+def get_attendance_report():
+    # Query params: classroom_id
+    classroom_id = request.args.get('classroom_id')
+    if not classroom_id:
+        return jsonify({'error': 'classroom_id is required'}), 400
+
+    classroom = Classroom.query.get_or_404(classroom_id)
+    batch = classroom.batch
+    if not batch:
+        return jsonify({'error': 'Classroom is not associated with any batch'}), 404
+
+    students = batch.students
+    assignments = Assignment.query.filter_by(classroom_id=classroom_id).all()
+    assignment_ids = [a.id for a in assignments]
+
+    # Get total lectures for each assignment
+    total_lectures = db.session.query(
+        AttendanceRecord.assignment_id,
+        db.func.sum(AttendanceRecord.lecture_count)
+    ).filter(
+        AttendanceRecord.assignment_id.in_(assignment_ids),
+        AttendanceRecord.status == 'total'
+    ).group_by(AttendanceRecord.assignment_id).all()
     
+    total_lectures_map = dict(total_lectures)
+
+    # Get total lectures for the classroom
+    total_classroom_lectures = sum(total_lectures_map.values())
+
+    # Get attendance for each student
+    student_attendance = db.session.query(
+        AttendanceRecord.student_id,
+        db.func.sum(AttendanceRecord.lecture_count)
+    ).filter(
+        AttendanceRecord.assignment_id.in_(assignment_ids),
+        AttendanceRecord.status == 'present'
+    ).group_by(AttendanceRecord.student_id).all()
+
+    student_attendance_map = dict(student_attendance)
+
+    report = []
+    for student in students:
+        attended = student_attendance_map.get(student.id, 0)
+        percentage = (attended / total_classroom_lectures * 100) if total_classroom_lectures > 0 else 0
+        report.append({
+            'student_id': student.id,
+            'name': student.name,
+            'roll_no': student.roll_no,
+            'attended_lectures': attended,
+            'total_lectures': total_classroom_lectures,
+            'percentage': round(percentage, 2)
+        })
+
+    return jsonify(report)

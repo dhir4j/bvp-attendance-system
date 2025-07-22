@@ -14,9 +14,3 @@ class Config:
         "pool_recycle": 280,                   # a bit under PythonAnywhere’s ~300s timeout
         "connect_args": {"sslmode": "require"}  # enforce SSL on every new connection
     }
-
-    # Google Sheets
-    SHEET_KEY    = '1E5L6Vo8jJugszPiYzximSMYTuV3nBuhD7JOX6feTB2E'
-    BASE_DIR       = os.path.abspath(os.path.dirname(__file__))
-    SERVICE_JSON   = os.path.join(BASE_DIR, 'sheets.json')
-    # SERVICE_JSON = os.environ.get('SERVICE_JSON', 'sheets.json')
