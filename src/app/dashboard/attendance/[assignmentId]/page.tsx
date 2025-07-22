@@ -1,4 +1,4 @@
-// src/app/attendance/[assignmentId]/page.tsx
+// src/app/dashboard/attendance/[assignmentId]/page.tsx
 "use client"
 import { AttendanceSheet } from '@/components/app/AttendanceSheet';
 import { StaffAssignmentsResponse } from '@/types';

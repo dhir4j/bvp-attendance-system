@@ -78,7 +78,7 @@ export default function DashboardPage() {
             const assignmentId = `${assignment.subject_id}-${assignment.batch_id}`;
 
             return (
-              <Link href={`/attendance/${assignmentId}`} key={assignmentId} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
+              <Link href={`/dashboard/attendance/${assignmentId}`} key={assignmentId} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
                 <Card className="hover:border-primary/80 transition-colors h-full flex flex-col hover:shadow-lg">
                   <CardHeader className="flex-grow">
                     <div className="flex items-start gap-4">

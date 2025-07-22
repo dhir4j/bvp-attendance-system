@@ -178,7 +178,7 @@ export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
                 <Label htmlFor="absent-rolls" className="text-base font-medium">Absent Students</Label>
                 <Textarea
                     id="absent-rolls"
-                    placeholder="Enter roll numbers separated by commas, spaces, or new lines..."
+                    placeholder="eg: 1401,1402,1403"
                     value={absentRolls}
                     onChange={(e) => setAbsentRolls(e.target.value)}
                     rows={8}
