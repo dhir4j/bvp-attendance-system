@@ -218,7 +218,7 @@ def manage_subjects():
             'id': sub.id,
             'course_code': sub.course_code,
             'dept_code': sub.dept_code,
-            'semester': sub.semester_number,
+            'semester_number': sub.semester_number,
             'subject_code': sub.subject_code,
             'subject_name': sub.subject_name
         } for sub in subjects]
@@ -300,6 +300,7 @@ def manage_batches():
         file = request.files['student_csv']
         if file.filename != '':
             stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+            # Use DictReader to handle headers automatically
             csv_reader = csv.DictReader(stream)
             for row in csv_reader:
                 student = Student.query.filter_by(enrollment_no=row['enrollment_no']).first()
@@ -310,6 +311,15 @@ def manage_batches():
                         name=row['name']
                     )
                     db.session.add(student)
+                
+                # Add/update batch_number if present in CSV
+                if 'batch_number' in row and row['batch_number']:
+                    try:
+                        student.batch_number = int(row['batch_number'])
+                    except (ValueError, TypeError):
+                        # Handle cases where batch_number is not a valid integer
+                        student.batch_number = None
+
                 # Associate student with the batch
                 new_batch.students.append(student)
             db.session.commit()
@@ -328,7 +338,7 @@ def manage_single_batch(batch_id):
             'class_number': batch.class_number,
             'academic_year': batch.academic_year,
             'semester': batch.semester,
-            'students': [{'id': s.id, 'name': s.name, 'roll_no': s.roll_no} for s in batch.students]
+            'students': [{'id': s.id, 'name': s.name, 'roll_no': s.roll_no, 'batch_number': s.batch_number} for s in batch.students]
         })
 
     # DELETE

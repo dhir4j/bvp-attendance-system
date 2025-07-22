@@ -39,10 +39,10 @@ import { useToast } from "@/hooks/use-toast"
 import type { Subject, Department } from "@/types"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-const initialFormData: Omit<Subject, "id"> = {
+const initialFormData: Omit<Subject, "id"> & { semester_number: string | number } = {
     course_code: "",
     dept_code: "",
-    semester_number: 0,
+    semester_number: "",
     subject_code: "",
     subject_name: ""
 };
@@ -238,7 +238,7 @@ export default function SubjectsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
-              <Input id="semester" type="number" value={formData.semester_number} onChange={(e) => setFormData({...formData, semester_number: parseInt(e.target.value) || 0})} />
+              <Input id="semester" type="number" value={formData.semester_number} onChange={(e) => setFormData({...formData, semester_number: e.target.value})} />
             </div>
           </div>
           <DialogFooter>

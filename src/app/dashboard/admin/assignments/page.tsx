@@ -179,7 +179,7 @@ export default function AssignmentsPage() {
                                     <SelectValue placeholder="Select Classroom" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {classrooms.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.class_name}</SelectItem>)}
+                                    {classrooms.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.class_name} ({c.batch_info})</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>

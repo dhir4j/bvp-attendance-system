@@ -43,6 +43,7 @@ class Student(db.Model):
     roll_no       = db.Column(db.String, nullable=False)
     enrollment_no = db.Column(db.String, unique=True, nullable=False)
     name          = db.Column(db.String, nullable=False)
+    batch_number  = db.Column(db.Integer, nullable=True) # For PR/TU batches (1, 2, 3)
     batches       = relationship("Batch", secondary=student_batches, back_populates="students")
 
 class Batch(db.Model):
