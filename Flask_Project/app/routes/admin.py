@@ -348,31 +348,40 @@ def delete_assignment(assign_id):
 @admin_bp.route('/attendance-report', methods=['GET'])
 @admin_required
 def get_attendance_report():
-    # Query params: batch_id
+    # Query params: batch_id, subject_id (optional), lecture_type (optional)
     batch_id = request.args.get('batch_id')
+    subject_id = request.args.get('subject_id')
+    lecture_type = request.args.get('lecture_type')
+
     if not batch_id:
         return jsonify({'error': 'batch_id is required'}), 400
 
     batch = Batch.query.get_or_404(batch_id)
     students = batch.students
-    assignments = Assignment.query.filter_by(batch_id=batch_id).all()
+    
+    # Base query for assignments
+    assignments_query = Assignment.query.filter_by(batch_id=batch_id)
+
+    if subject_id:
+        assignments_query = assignments_query.filter_by(subject_id=subject_id)
+    if lecture_type:
+        assignments_query = assignments_query.filter_by(lecture_type=lecture_type)
+
+    assignments = assignments_query.all()
+    if not assignments:
+        return jsonify([]) # Return empty list if no assignments match filters
+
     assignment_ids = [a.id for a in assignments]
 
-    # Get total lectures for each assignment
+    # Get total lectures for the filtered assignments
     total_lectures_query = db.session.query(
-        TotalLectures.assignment_id,
         db.func.sum(TotalLectures.lecture_count)
     ).filter(
         TotalLectures.assignment_id.in_(assignment_ids)
-    ).group_by(TotalLectures.assignment_id).all()
-    
-    total_lectures_map = dict(total_lectures_query)
+    ).scalar() or 0
 
-    # Get total lectures for the batch
-    total_batch_lectures = sum(total_lectures_map.values())
-
-    # Get attendance for each student
-    student_attendance = db.session.query(
+    # Get attendance for each student for the filtered assignments
+    student_attendance_query = db.session.query(
         AttendanceRecord.student_id,
         db.func.sum(AttendanceRecord.lecture_count)
     ).filter(
@@ -380,19 +389,36 @@ def get_attendance_report():
         AttendanceRecord.status == 'present'
     ).group_by(AttendanceRecord.student_id).all()
 
-    student_attendance_map = dict(student_attendance)
+    student_attendance_map = dict(student_attendance_query)
 
     report = []
     for student in students:
         attended = student_attendance_map.get(student.id, 0)
-        percentage = (attended / total_batch_lectures * 100) if total_batch_lectures > 0 else 0
+        percentage = (attended / total_lectures_query * 100) if total_lectures_query > 0 else 0
         report.append({
             'student_id': student.id,
             'name': student.name,
             'roll_no': student.roll_no,
             'attended_lectures': attended,
-            'total_lectures': total_batch_lectures,
+            'total_lectures': total_lectures_query,
             'percentage': round(percentage, 2)
         })
 
     return jsonify(report)
+
+
+@admin_bp.route('/subjects-by-batch/<int:batch_id>', methods=['GET'])
+@admin_required
+def get_subjects_by_batch(batch_id):
+    """
+    Returns a list of unique subjects assigned to a specific batch.
+    """
+    subjects = db.session.query(
+        Subject.id, Subject.subject_name, Subject.subject_code
+    ).join(Assignment, Subject.id == Assignment.subject_id)\
+     .filter(Assignment.batch_id == batch_id)\
+     .distinct().all()
+    
+    result = [{'id': s.id, 'name': f"{s.subject_name} ({s.subject_code})"} for s in subjects]
+    return jsonify(result)
+```

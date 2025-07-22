@@ -1,8 +1,9 @@
+
 "use client"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookCopy, Home, LogOut, Shield, UserX } from "lucide-react"
+import { BookCopy, Home, LogOut, Shield, FileBarChart } from "lucide-react"
 
 import {
   Sidebar,
@@ -19,7 +20,7 @@ export function AppSidebar() {
 
   const menuItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
-    { href: "/dashboard/defaulters", label: "Defaulters", icon: UserX },
+    { href: "/dashboard/reports", label: "Reports", icon: FileBarChart },
     { href: "/dashboard/admin", label: "Admin Panel", icon: Shield },
   ]
 
@@ -64,3 +65,4 @@ export function AppSidebar() {
     </Sidebar>
   )
 }
+```

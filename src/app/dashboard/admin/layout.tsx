@@ -3,7 +3,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Users, Book, Link2, FileBarChart, School } from "lucide-react"
+import { Users, Book, Link as LinkIcon, FileBarChart, School2, Building } from "lucide-react"
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -33,16 +33,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link href="/dashboard/admin/staff"><Users className="mr-2 h-4 w-4" />Staff</Link>
           </TabsTrigger>
            <TabsTrigger value="departments" asChild>
-            <Link href="/dashboard/admin/departments"><School className="mr-2 h-4 w-4" />Departments</Link>
+            <Link href="/dashboard/admin/departments"><Building className="mr-2 h-4 w-4" />Departments</Link>
           </TabsTrigger>
           <TabsTrigger value="subjects" asChild>
             <Link href="/dashboard/admin/subjects"><Book className="mr-2 h-4 w-4" />Subjects</Link>
           </TabsTrigger>
            <TabsTrigger value="batches" asChild>
-            <Link href="/dashboard/admin/batches"><Users className="mr-2 h-4 w-4" />Batches</Link>
+            <Link href="/dashboard/admin/batches"><School2 className="mr-2 h-4 w-4" />Batches</Link>
           </TabsTrigger>
           <TabsTrigger value="assignments" asChild>
-             <Link href="/dashboard/admin/assignments"><Link2 className="mr-2 h-4 w-4" />Assignments</Link>
+             <Link href="/dashboard/admin/assignments"><LinkIcon className="mr-2 h-4 w-4" />Assignments</Link>
           </TabsTrigger>
           <TabsTrigger value="report" asChild>
              <Link href="/dashboard/admin/report"><FileBarChart className="mr-2 h-4 w-4" />Reports</Link>
@@ -53,3 +53,4 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   )
 }
+```
