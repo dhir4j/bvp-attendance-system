@@ -76,7 +76,7 @@ class AttendanceRecord(db.Model):
     student_id   = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     date         = db.Column(db.Date, nullable=False)
     status       = db.Column(db.String, nullable=False) # present, absent
-    lecture_count= db.Column(db.Integer, default=1, nullable=False)
+    lecture_count= db.Column(db.Integer, default=0, nullable=False)
 
 class TotalLectures(db.Model):
     __tablename__ = 'total_lectures'
@@ -85,3 +85,5 @@ class TotalLectures(db.Model):
     date          = db.Column(db.Date, nullable=False)
     lecture_count = db.Column(db.Integer, default=1, nullable=False)
     __table_args__ = (db.UniqueConstraint('assignment_id', 'date'),)
+
+    

@@ -165,13 +165,17 @@ def mark_attendance():
         ).first()
 
         if existing_record:
-            # If student was present but now marked absent, update status
-            if existing_record.status == 'present' and status == 'absent':
-                existing_record.status = 'absent'
-            # If student was present, increment their lecture count
-            elif existing_record.status == 'present' and status == 'present':
+            # If student was present and is still present, increment their lecture count
+            if existing_record.status == 'present' and status == 'present':
                  existing_record.lecture_count += 1
-            # If student was absent, they remain absent for all lectures that day
+            # If student was absent, but is now present for this lecture, update status and set count to 1
+            elif existing_record.status == 'absent' and status == 'present':
+                existing_record.status = 'present'
+                existing_record.lecture_count = 1
+            # If student was present but now marked absent, update status. Lecture count stays from previous present records.
+            elif existing_record.status == 'present' and status == 'absent':
+                existing_record.status = 'absent'
+            # If student was absent and is still absent, do nothing.
             
         else:
             # Create a new record if one doesn't exist
@@ -180,8 +184,8 @@ def mark_attendance():
                 student_id=student.id,
                 date=today,
                 status=status,
-                # if present, starts with 1 lecture, if absent, also 1 (as they missed 1)
-                lecture_count=1 
+                # if present, starts with 1 lecture, if absent, it's 0 as they missed it.
+                lecture_count=1 if status == 'present' else 0
             )
             db.session.add(record)
 
@@ -272,4 +276,5 @@ def get_staff_assigned_subjects(batch_id):
     
     result = [{'id': s.id, 'name': f"{s.subject_name} ({s.subject_code})"} for s in subjects]
     return jsonify(result)
-```
+
+    
