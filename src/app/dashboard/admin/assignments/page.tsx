@@ -1,3 +1,4 @@
+// src/app/dashboard/admin/assignments/page.tsx
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
@@ -36,7 +37,7 @@ import {
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import type { Staff, Subject, Assignment } from "@/types"
+import type { Staff, Subject, Assignment, Classroom } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 
 export default function AssignmentsPage() {
@@ -44,25 +45,34 @@ export default function AssignmentsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
   const [subjects, setSubjects] = useState<Subject[]>([])
+  const [classrooms, setClassrooms] = useState<Classroom[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [newAssignment, setNewAssignment] = useState({ staff_id: "", subject_id: "", lecture_type: "", batch_number: null as number | null, classroom_name: "" })
+  const [newAssignment, setNewAssignment] = useState({
+    staff_id: "",
+    subject_id: "",
+    classroom_id: "",
+    lecture_type: "",
+    batch_number: null as number | null
+  })
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-        const [assignmentsRes, staffRes, subjectsRes] = await Promise.all([
+        const [assignmentsRes, staffRes, subjectsRes, classroomsRes] = await Promise.all([
             fetch('/api/admin/assignments'),
             fetch('/api/admin/staff'),
-            fetch('/api/admin/subjects')
+            fetch('/api/admin/subjects'),
+            fetch('/api/admin/classrooms')
         ]);
-        if(!assignmentsRes.ok || !staffRes.ok || !subjectsRes.ok) {
+        if(!assignmentsRes.ok || !staffRes.ok || !subjectsRes.ok || !classroomsRes.ok) {
             throw new Error("Failed to fetch initial data");
         }
         setAssignments(await assignmentsRes.json());
         setStaff(await staffRes.json());
         setSubjects(await subjectsRes.json());
+        setClassrooms(await classroomsRes.json());
     } catch(error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
@@ -74,48 +84,37 @@ export default function AssignmentsPage() {
     fetchData();
   }, [fetchData]);
 
-  const assignedData = useMemo(() => {
-    return assignments.map(a => {
-        const staffMember = staff.find(s => s.id === a.staff_id)
-        const subject = subjects.find(s => s.id === a.subject_id)
-        return { 
-            ...a, 
-            staffName: staffMember?.full_name || 'Unknown Staff', 
-            subjectName: subject ? `${subject.name} (${subject.code})` : 'Unknown Subject'
-        }
-    });
-  }, [assignments, staff, subjects]);
-
   const handleSave = async () => {
-    if(newAssignment.staff_id && newAssignment.subject_id && newAssignment.lecture_type && newAssignment.classroom_name) {
-        try {
-            const res = await fetch("/api/admin/assignments", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  ...newAssignment,
-                  staff_id: parseInt(newAssignment.staff_id),
-                  subject_id: parseInt(newAssignment.subject_id)
-                })
-            });
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || "Failed to create assignment");
-            }
-            toast({ title: "Success", description: "Assignment created." });
-            fetchData();
-            setIsModalOpen(false);
-            setNewAssignment({ staff_id: "", subject_id: "", lecture_type: "", batch_number: null, classroom_name: "" });
-        } catch (error: any) {
-            toast({ variant: "destructive", title: "Error", description: error.message });
-        }
-    } else {
+    if(!newAssignment.staff_id || !newAssignment.subject_id || !newAssignment.lecture_type || !newAssignment.classroom_id) {
         toast({ variant: "destructive", title: "Error", description: "Please fill all required fields." })
+        return;
+    }
+    try {
+        const res = await fetch("/api/admin/assignments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...newAssignment,
+              staff_id: parseInt(newAssignment.staff_id),
+              subject_id: parseInt(newAssignment.subject_id),
+              classroom_id: parseInt(newAssignment.classroom_id),
+            })
+        });
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || "Failed to create assignment");
+        }
+        toast({ title: "Success", description: "Assignment created." });
+        fetchData();
+        setIsModalOpen(false);
+        setNewAssignment({ staff_id: "", subject_id: "", lecture_type: "", batch_number: null, classroom_id: "" });
+    } catch (error: any) {
+        toast({ variant: "destructive", title: "Error", description: error.message });
     }
   }
   
   const handleDelete = async (assignmentId: number) => {
-    if(!confirm("Are you sure?")) return;
+    if(!confirm("Are you sure? This will delete associated attendance records.")) return;
     try {
         const res = await fetch(`/api/admin/assignments/${assignmentId}`, { method: "DELETE" });
         if(!res.ok) {
@@ -123,7 +122,7 @@ export default function AssignmentsPage() {
             throw new Error(errorData.error || "Failed to delete assignment");
         }
         toast({ title: "Success", description: "Assignment deleted." });
-        fetchData();
+        setAssignments(assignments.filter(a => a.id !== assignmentId));
     } catch (error: any) {
          toast({ variant: "destructive", title: "Error", description: error.message });
     }
@@ -136,7 +135,7 @@ export default function AssignmentsPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <CardTitle>Staff-Subject Assignments</CardTitle>
-              <CardDescription>Assign staff members to subjects.</CardDescription>
+              <CardDescription>Assign staff members to subjects, classrooms, and batches.</CardDescription>
             </div>
              <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                 <DialogTrigger asChild>
@@ -148,7 +147,7 @@ export default function AssignmentsPage() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Create New Assignment</DialogTitle>
-                        <DialogDescription>Select a staff member and a subject to assign.</DialogDescription>
+                        <DialogDescription>Select a staff, subject, classroom and lecture type.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="space-y-2">
@@ -169,7 +168,18 @@ export default function AssignmentsPage() {
                                     <SelectValue placeholder="Select Subject" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {subjects.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name} - {s.code}</SelectItem>)}
+                                    {subjects.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.subject_name} ({s.subject_code})</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="classroom">Classroom</Label>
+                            <Select onValueChange={(value) => setNewAssignment({...newAssignment, classroom_id: value})}>
+                                <SelectTrigger id="classroom">
+                                    <SelectValue placeholder="Select Classroom" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {classrooms.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.class_name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -186,16 +196,12 @@ export default function AssignmentsPage() {
                                 </SelectContent>
                             </Select>
                         </div>
-                         {newAssignment.lecture_type !== 'TH' && (
+                         {newAssignment.lecture_type && newAssignment.lecture_type !== 'TH' && (
                             <div className="space-y-2">
-                                <Label htmlFor="batch_number">Batch Number</Label>
-                                <Input id="batch_number" type="number" placeholder="Enter batch number (e.g. 1, 2, 3)" onChange={(e) => setNewAssignment({...newAssignment, batch_number: e.target.value ? parseInt(e.target.value) : null})} />
+                                <Label htmlFor="batch_number">Batch Number (for PR/TU)</Label>
+                                <Input id="batch_number" type="number" placeholder="e.g. 1, 2, 3" onChange={(e) => setNewAssignment({...newAssignment, batch_number: e.target.value ? parseInt(e.target.value) : null})} />
                             </div>
                         )}
-                        <div className="space-y-2">
-                            <Label htmlFor="classroom_name">Classroom Name</Label>
-                            <Input id="classroom_name" placeholder="e.g. C-101" value={newAssignment.classroom_name} onChange={(e) => setNewAssignment({...newAssignment, classroom_name: e.target.value})} />
-                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
@@ -212,9 +218,9 @@ export default function AssignmentsPage() {
                 <TableRow>
                     <TableHead>Staff Member</TableHead>
                     <TableHead>Assigned Subject</TableHead>
+                    <TableHead>Classroom</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Batch</TableHead>
-                    <TableHead>Classroom</TableHead>
                     <TableHead className="w-[50px] text-right">Actions</TableHead>
                 </TableRow>
                 </TableHeader>
@@ -223,19 +229,19 @@ export default function AssignmentsPage() {
                     <TableRow>
                         <TableCell colSpan={6} className="text-center">Loading...</TableCell>
                     </TableRow>
-                ) : assignedData.map((a) => (
+                ) : assignments.map((a) => (
                     <TableRow key={a.id}>
-                    <TableCell className="font-medium">{a.staffName}</TableCell>
-                    <TableCell>{a.subjectName}</TableCell>
-                    <TableCell>{a.lecture_type}</TableCell>
-                    <TableCell>{a.batch_number ?? 'N/A'}</TableCell>
-                    <TableCell>{a.classroom_name}</TableCell>
-                    <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(a.id)} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete</span>
-                        </Button>
-                    </TableCell>
+                      <TableCell className="font-medium">{a.staff_name}</TableCell>
+                      <TableCell>{a.subject_name}</TableCell>
+                      <TableCell>{a.classroom_name}</TableCell>
+                      <TableCell>{a.lecture_type}</TableCell>
+                      <TableCell>{a.batch_number ?? 'N/A'}</TableCell>
+                      <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(a.id)} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Delete</span>
+                          </Button>
+                      </TableCell>
                     </TableRow>
                 ))}
                 </TableBody>

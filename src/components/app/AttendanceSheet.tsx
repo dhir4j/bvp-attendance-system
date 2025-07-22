@@ -1,25 +1,24 @@
+// src/components/app/AttendanceSheet.tsx
 "use client"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle, Plus, Users, X } from "lucide-react"
+import { CheckCircle, Users, X } from "lucide-react"
 
 import type { StaffAssignmentDetails } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
+import { Label } from "../ui/label"
 
 interface AttendanceSheetProps {
-  subjectId: number;
   assignment: StaffAssignmentDetails;
 }
 
-export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps) {
+export function AttendanceSheet({ assignment }: AttendanceSheetProps) {
   const router = useRouter()
   const { toast } = useToast()
 
@@ -30,26 +29,28 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
   const [isLoading, setIsLoading] = useState(false)
   
   const lectureTypes = Object.keys(assignment.lecture_types);
-  const batches = lectureType ? assignment.lecture_types[lectureType] : [];
-  
+  const batchesForType = lectureType ? assignment.lecture_types[lectureType] : [];
+  // Ensure batches are displayed correctly, even if only `null` (for TH) is present.
+  const showBatchSelector = batchesForType && batchesForType.length > 0 && batchesForType[0] !== null;
+
   const handleSubmit = async () => {
     if(!lectureType) {
         toast({ variant: "destructive", title: "Error", description: "Please select a lecture type."});
         return;
     }
     
-    const isBatchRequired = lectureType === 'PR' || lectureType === 'TU';
-    if(isBatchRequired && !batchNumber) {
+    if(showBatchSelector && !batchNumber) {
         toast({ variant: "destructive", title: "Error", description: "Please select a batch for this lecture type."});
         return;
     }
     
     setIsLoading(true);
 
-    const absent_rolls = absentRolls.split(/[\s,]+/).filter(Boolean).map(r => r.toUpperCase());
+    const absent_rolls = absentRolls.split(/[\s,]+/).filter(Boolean);
 
     const body = {
-        subject_id: subjectId,
+        subject_id: assignment.subject_id,
+        classroom_id: assignment.classroom_id,
         lecture_type: lectureType,
         batch_number: batchNumber ? parseInt(batchNumber) : null,
         absent_rolls
@@ -83,8 +84,8 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
     <>
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-3xl font-bold font-headline">{assignment.code}</h1>
-          <p className="text-muted-foreground">Mark attendance for your assigned lectures.</p>
+          <h1 className="text-3xl font-bold font-headline">{assignment.subject_name} ({assignment.subject_code})</h1>
+          <p className="text-muted-foreground">Marking attendance for {assignment.classroom_name}.</p>
         </div>
 
         <Card>
@@ -102,13 +103,13 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
                 <SelectContent>
                   {lectureTypes.map((type) => (
                     <SelectItem key={type} value={type}>
-                      {type}
+                      {type === 'TH' ? 'Theory' : type === 'PR' ? 'Practical' : 'Tutorial'} ({type})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            {batches && batches.length > 0 && batches[0] !== null && (
+            {showBatchSelector && (
                  <div className="space-y-2">
                     <Label>Batch Number</Label>
                     <Select value={batchNumber} onValueChange={setBatchNumber}>
@@ -116,7 +117,7 @@ export function AttendanceSheet({ subjectId, assignment }: AttendanceSheetProps)
                             <SelectValue placeholder="Select batch" />
                         </SelectTrigger>
                         <SelectContent>
-                        {batches.map((batch) => (
+                        {batchesForType.map((batch) => (
                             <SelectItem key={batch} value={String(batch)}>
                             Batch {batch}
                             </SelectItem>

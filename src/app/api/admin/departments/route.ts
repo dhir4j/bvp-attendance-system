@@ -1,19 +1,15 @@
-// src/app/api/staff/attendance/route.ts
+// src/app/api/admin/departments/route.ts
 'use server';
 import { type NextRequest, NextResponse } from 'next/server';
 import { getFlaskBackend } from '@/lib/utils';
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   const cookie = request.headers.get('cookie');
-  const body = await request.json();
-
-  const res = await fetch(`${getFlaskBackend()}/staff/mark-attendance`, {
-    method: 'POST',
+  const res = await fetch(`${getFlaskBackend()}/admin/departments`, {
     headers: {
       'Content-Type': 'application/json',
       ...(cookie && { cookie }),
     },
-    body: JSON.stringify(body),
   });
 
   const data = await res.json();

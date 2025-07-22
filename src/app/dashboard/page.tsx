@@ -1,3 +1,4 @@
+// src/app/dashboard/page.tsx
 "use client"
 
 import Link from 'next/link';
@@ -62,8 +63,6 @@ export default function DashboardPage() {
         </div>
     );
   }
-  
-  const assignmentKeys = assignments ? Object.keys(assignments) : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,21 +72,21 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {assignments && assignmentKeys.length > 0 ? (
-          assignmentKeys.map((subjectId) => {
-            const assignment = assignments[subjectId];
+        {assignments && assignments.length > 0 ? (
+          assignments.map((assignment) => {
             const lectureTypes = Object.keys(assignment.lecture_types).join(', ');
+            const assignmentId = `${assignment.subject_id}-${assignment.classroom_id}`;
 
             return (
-              <Link href={`/attendance/${subjectId}`} key={subjectId} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
+              <Link href={`/attendance/${assignmentId}`} key={assignmentId} className="group h-full w-full max-w-sm mx-auto sm:max-w-none sm:mx-0">
                 <Card className="hover:border-primary/80 transition-colors h-full flex flex-col hover:shadow-lg">
                   <CardHeader className="flex-grow">
                     <div className="flex items-start gap-4">
                       <BookCopy className="h-8 w-8 text-primary flex-shrink-0 mt-1" />
                       <div>
-                        <CardTitle className="text-lg leading-tight">{assignment.code}</CardTitle>
+                        <CardTitle className="text-lg leading-tight">{assignment.subject_name} ({assignment.subject_code})</CardTitle>
                         <CardDescription className="mt-1">
-                          Types: {lectureTypes}
+                          {assignment.classroom_name} | Types: {lectureTypes}
                         </CardDescription>
                       </div>
                     </div>

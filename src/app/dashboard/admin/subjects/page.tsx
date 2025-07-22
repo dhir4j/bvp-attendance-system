@@ -1,3 +1,4 @@
+// src/app/dashboard/admin/subjects/page.tsx
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -35,32 +36,36 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import type { Subject } from "@/types"
+import type { Subject, Department } from "@/types"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-const initialFormData = {
-    id: 0,
+const initialFormData: Omit<Subject, "id"> = {
     course_code: "",
     dept_code: "",
-    semester: 0,
-    code: "",
-    name: ""
+    semester_number: 0,
+    subject_code: "",
+    subject_name: ""
 };
 
 export default function SubjectsPage() {
   const { toast } = useToast()
   const [subjects, setSubjects] = useState<Subject[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null)
-  const [formData, setFormData] = useState<Omit<Subject, 'totalLectures'>>(initialFormData)
+  const [formData, setFormData] = useState(initialFormData)
   
-  const fetchSubjects = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-        const res = await fetch("/api/admin/subjects");
-        if (!res.ok) throw new Error("Failed to fetch subjects");
-        const data = await res.json();
-        setSubjects(data);
+        const [subjectsRes, deptsRes] = await Promise.all([
+          fetch("/api/admin/subjects"),
+          fetch("/api/admin/departments")
+        ]);
+        if (!subjectsRes.ok || !deptsRes.ok) throw new Error("Failed to fetch data");
+        setSubjects(await subjectsRes.json());
+        setDepartments(await deptsRes.json());
     } catch(error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
@@ -69,19 +74,18 @@ export default function SubjectsPage() {
   }, [toast])
 
   useEffect(() => {
-    fetchSubjects()
-  }, [fetchSubjects])
+    fetchData()
+  }, [fetchData])
 
   const handleOpenModal = (subject: Subject | null = null) => {
     setSelectedSubject(subject)
     if (subject) {
       setFormData({
-        id: subject.id,
-        name: subject.name,
-        code: subject.code,
+        subject_name: subject.subject_name,
+        subject_code: subject.subject_code,
         course_code: subject.course_code,
         dept_code: subject.dept_code,
-        semester: subject.semester
+        semester_number: subject.semester_number
       })
     } else {
       setFormData(initialFormData)
@@ -99,11 +103,8 @@ export default function SubjectsPage() {
     const method = selectedSubject ? "PUT" : "POST";
 
     const body = {
-      subject_name: formData.name,
-      subject_code: formData.code,
-      course_code: formData.course_code,
-      dept_code: formData.dept_code,
-      semester_number: formData.semester
+      ...formData,
+      semester_number: Number(formData.semester_number)
     }
     
     try {
@@ -117,7 +118,7 @@ export default function SubjectsPage() {
             throw new Error(errorData.error || `Failed to ${selectedSubject ? 'update' : 'add'} subject`);
         }
         toast({ title: "Success", description: `Subject ${selectedSubject ? 'updated' : 'added'}.` });
-        fetchSubjects();
+        fetchData();
         handleCloseModal();
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message });
@@ -133,7 +134,7 @@ export default function SubjectsPage() {
             throw new Error(errorData.error || "Failed to delete subject");
         }
         toast({ title: "Success", description: "Subject deleted." });
-        fetchSubjects();
+        setSubjects(subjects.filter(s => s.id !== subjectId));
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message });
     }
@@ -159,7 +160,7 @@ export default function SubjectsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Code</TableHead>
+                <TableHead>Subject Code</TableHead>
                 <TableHead>Course Code</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Semester</TableHead>
@@ -173,11 +174,11 @@ export default function SubjectsPage() {
                 </TableRow>
               ) : subjects.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>{s.code}</TableCell>
+                  <TableCell className="font-medium">{s.subject_name}</TableCell>
+                  <TableCell>{s.subject_code}</TableCell>
                   <TableCell>{s.course_code}</TableCell>
                   <TableCell>{s.dept_code}</TableCell>
-                  <TableCell>{s.semester}</TableCell>
+                  <TableCell>{s.semester_number}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -214,23 +215,30 @@ export default function SubjectsPage() {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="name">Subject Name</Label>
-              <Input id="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+              <Input id="name" value={formData.subject_name} onChange={(e) => setFormData({...formData, subject_name: e.target.value})} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="code">Subject Code</Label>
-              <Input id="code" value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} />
+              <Input id="code" placeholder="e.g. DMS" value={formData.subject_code} onChange={(e) => setFormData({...formData, subject_code: e.target.value.toUpperCase()})} />
             </div>
              <div className="space-y-2">
               <Label htmlFor="course_code">Course Code</Label>
-              <Input id="course_code" value={formData.course_code} onChange={(e) => setFormData({...formData, course_code: e.target.value})} />
+              <Input id="course_code" placeholder="e.g. 22318" value={formData.course_code} onChange={(e) => setFormData({...formData, course_code: e.target.value.toUpperCase()})} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dept_code">Department Code</Label>
-              <Input id="dept_code" value={formData.dept_code} onChange={(e) => setFormData({...formData, dept_code: e.target.value})} />
+                <Label htmlFor="dept_code">Department</Label>
+                <Select value={formData.dept_code} onValueChange={(value) => setFormData({...formData, dept_code: value})}>
+                    <SelectTrigger id="dept_code">
+                        <SelectValue placeholder="Select Department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {departments.map(d => <SelectItem key={d.dept_code} value={d.dept_code}>{d.dept_name} ({d.dept_code})</SelectItem>)}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
-              <Input id="semester" type="number" value={formData.semester} onChange={(e) => setFormData({...formData, semester: parseInt(e.target.value) || 0})} />
+              <Input id="semester" type="number" value={formData.semester_number} onChange={(e) => setFormData({...formData, semester_number: parseInt(e.target.value) || 0})} />
             </div>
           </div>
           <DialogFooter>

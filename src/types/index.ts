@@ -5,32 +5,67 @@ export interface Staff {
   password?: string; // Only for creation/update
 }
 
+export interface Department {
+  dept_code: string;
+  dept_name: string;
+}
+
 export interface Subject {
   id: number;
   course_code: string;
   dept_code: string;
+  semester_number: number;
+  subject_code: string;
+  subject_name: string;
+}
+
+export interface Batch {
+  id: number;
+  dept_name: string;
+  class_number: string;
+  academic_year: string;
   semester: number;
-  code: string;
+  student_count: number;
+  students?: Student[];
+}
+
+export interface Student {
+  id: number;
+  roll_no: string;
+  enrollment_no: string;
   name: string;
+  batch_number: number | null;
+}
+
+export interface Classroom {
+  id: number;
+  dept_code: string;
+  class_name: string;
+  batch_id: number | null;
+  batch_info: string;
 }
 
 export interface Assignment {
   id: number;
   staff_id: number;
+  staff_name: string;
   subject_id: number;
+  subject_name: string;
+  classroom_id: number;
+  classroom_name: string;
   lecture_type: 'TH' | 'PR' | 'TU';
   batch_number: number | null;
-  classroom_name: string;
 }
 
-// Type for the data returned by /staff/assignments
 export interface StaffAssignmentDetails {
-    code: string; // subject code
-    lecture_types: {
-        [key: string]: (number | null)[] // e.g. 'TH': [null], 'PR': [1, 2]
-    }
+  subject_id: number;
+  subject_name: string;
+  subject_code: string;
+  classroom_id: number;
+  classroom_name: string;
+  lecture_types: {
+    [key: string]: (number | null)[];
+  };
 }
 
-export type StaffAssignmentsResponse = {
-    [subject_id: string]: StaffAssignmentDetails
-}
+export type StaffAssignmentsResponse = StaffAssignmentDetails[];
