@@ -39,7 +39,7 @@ import { useToast } from "@/hooks/use-toast"
 import type { Subject, Department } from "@/types"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-const initialFormData: Omit<Subject, "id"> & { semester_number: string | number } = {
+const initialFormData: Omit<Subject, "id" | "semester_number"> & { semester_number: string } = {
     course_code: "",
     dept_code: "",
     semester_number: "",
@@ -85,7 +85,7 @@ export default function SubjectsPage() {
         subject_code: subject.subject_code,
         course_code: subject.course_code,
         dept_code: subject.dept_code,
-        semester_number: subject.semester_number
+        semester_number: String(subject.semester_number)
       })
     } else {
       setFormData(initialFormData)
@@ -102,9 +102,15 @@ export default function SubjectsPage() {
     const url = selectedSubject ? `/api/admin/subjects/${selectedSubject.id}` : "/api/admin/subjects";
     const method = selectedSubject ? "PUT" : "POST";
 
+    const semester = parseInt(formData.semester_number, 10);
+    if (isNaN(semester)) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Semester must be a valid number." });
+        return;
+    }
+
     const body = {
       ...formData,
-      semester_number: Number(formData.semester_number)
+      semester_number: semester
     }
     
     try {
