@@ -155,6 +155,7 @@ export default function StaffReportsPage() {
       const relevantAssignment = assignments.find(a => 
         String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId
       );
+      // FIX: Add a check to ensure relevantAssignment is not null before accessing its properties
       if (relevantAssignment?.lecture_types[selectedLectureType]) {
         // This logic assumes one staff teaches one sub-batch per PR/TU.
         // If a staff could teach multiple, this would need adjustment.

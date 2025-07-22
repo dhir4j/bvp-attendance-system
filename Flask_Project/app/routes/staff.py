@@ -266,10 +266,12 @@ def get_staff_attendance_report():
 
             total_lectures = db.session.query(db.func.sum(TotalLectures.lecture_count))\
                 .filter(TotalLectures.assignment_id.in_(assignment_ids)).scalar() or 0
-
+            
+            # CORRECTED: Only sum lecture_count where status is 'present'
             attended_lectures = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
                 AttendanceRecord.assignment_id.in_(assignment_ids),
-                AttendanceRecord.student_id == student.id
+                AttendanceRecord.student_id == student.id,
+                AttendanceRecord.status == 'present'
             ).scalar() or 0
 
         percentage = (attended_lectures / total_lectures * 100) if total_lectures > 0 else 0
