@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, session
-from ..models import Staff, Subject, Assignment, Batch, Student, AttendanceRecord
+from ..models import Staff, Subject, Assignment, Batch, Student, AttendanceRecord, TotalLectures
 from .. import db, bcrypt
 from ..auth import staff_required
 from datetime import date
@@ -95,21 +95,17 @@ def mark_attendance():
     today = date.today()
 
     # Increment total lectures count for this specific assignment
-    # Check if a 'total' record for this assignment on this day already exists
-    total_record = AttendanceRecord.query.filter_by(
+    total_record = TotalLectures.query.filter_by(
         assignment_id=assignment.id,
-        date=today,
-        status='total'
+        date=today
     ).first()
 
     if total_record:
         total_record.lecture_count += 1
     else:
-        total_record = AttendanceRecord(
+        total_record = TotalLectures(
             assignment_id=assignment.id,
-            student_id=-1, # Using -1 convention for total lecture entries
             date=today,
-            status='total',
             lecture_count=1
         )
         db.session.add(total_record)

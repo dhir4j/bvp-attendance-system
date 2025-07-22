@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, session
 from sqlalchemy.exc import IntegrityError, OperationalError
 from ..models import (
     Staff, Subject, Assignment, Department,
-    Batch, Student, student_batches
+    Batch, Student, student_batches, TotalLectures
 )
 from .. import db, bcrypt
 from ..auth import admin_required
@@ -359,15 +359,14 @@ def get_attendance_report():
     assignment_ids = [a.id for a in assignments]
 
     # Get total lectures for each assignment
-    total_lectures = db.session.query(
-        AttendanceRecord.assignment_id,
-        db.func.sum(AttendanceRecord.lecture_count)
+    total_lectures_query = db.session.query(
+        TotalLectures.assignment_id,
+        db.func.sum(TotalLectures.lecture_count)
     ).filter(
-        AttendanceRecord.assignment_id.in_(assignment_ids),
-        AttendanceRecord.status == 'total'
-    ).group_by(AttendanceRecord.assignment_id).all()
+        TotalLectures.assignment_id.in_(assignment_ids)
+    ).group_by(TotalLectures.assignment_id).all()
     
-    total_lectures_map = dict(total_lectures)
+    total_lectures_map = dict(total_lectures_query)
 
     # Get total lectures for the batch
     total_batch_lectures = sum(total_lectures_map.values())

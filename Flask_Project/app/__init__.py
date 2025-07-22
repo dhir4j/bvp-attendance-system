@@ -2,7 +2,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
-from sqlalchemy import text, inspect as sqlalchemy_inspect, Table
+from sqlalchemy import text, inspect as sqlalchemy_inspect
 
 db     = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -14,6 +14,9 @@ def create_app():
     # allow only your front-end origin
     CORS(app, resources={r"/*": {"origins": ["https://bvp.scrape.ink", "https://www.attendance.scrape.ink"]}})
 
+    # Import models here so they are registered with SQLAlchemy
+    from .models import Student, Staff, Subject, Department, Batch, Assignment, AttendanceRecord, TotalLectures
+    
     db.init_app(app)
     bcrypt.init_app(app)
 
@@ -26,7 +29,6 @@ def create_app():
         inspector = sqlalchemy_inspect(db.engine)
         
         # --- Migrate 'students' table ---
-        # Use a try-except block in case the table doesn't exist yet on first run
         try:
             student_columns = [col['name'] for col in inspector.get_columns('students')]
             if 'batch_number' not in student_columns:
