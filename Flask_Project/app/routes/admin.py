@@ -34,11 +34,14 @@ def manage_staff():
 
     # POST → create new staff
     data = request.json or {}
-    for field in ('username', 'password', 'full_name'):
-        if field not in data:
-            return jsonify({'error': f'{field} is required'}), 400
+    if 'username' not in data or 'full_name' not in data:
+        return jsonify({'error': 'Username and full_name are required'}), 400
 
-    pwd_hash = bcrypt.generate_password_hash(data['password']).decode()
+    password = data.get('password') # Password is optional for creation now
+    if not password:
+        password = "defaultpassword" # Or any other logic you prefer
+
+    pwd_hash = bcrypt.generate_password_hash(password).decode()
     new_staff = Staff(
         username=data['username'],
         full_name=data['full_name'],
@@ -56,6 +59,7 @@ def manage_staff():
 
     return jsonify({'message': 'Staff added', 'id': new_staff.id}), 201
 
+
 @admin_bp.route('/staff/<int:staff_id>', methods=['PUT', 'DELETE'])
 @admin_required
 def update_delete_staff(staff_id):
@@ -65,7 +69,7 @@ def update_delete_staff(staff_id):
         data = request.json or {}
         if 'full_name' in data:
             staff.full_name = data['full_name']
-        if 'password' in data:
+        if 'password' in data and data['password']:
             staff.password_hash = bcrypt.generate_password_hash(data['password']).decode()
         try:
             db.session.commit()
@@ -326,6 +330,17 @@ def manage_assignments():
     required_fields = ['staff_id', 'subject_id', 'batch_id', 'lecture_type']
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
+
+    # Check for duplicate assignment
+    existing_assignment = Assignment.query.filter_by(
+        subject_id=data['subject_id'],
+        batch_id=data['batch_id'],
+        lecture_type=data['lecture_type'],
+        batch_number=data.get('batch_number') # This will be None if not provided, which is correct
+    ).first()
+
+    if existing_assignment:
+        return jsonify({'error': 'This assignment (subject, batch, type, and sub-batch) already exists.'}), 409
 
     new_assignment = Assignment(
         staff_id=data['staff_id'],
