@@ -308,3 +308,30 @@ def get_staff_assigned_subjects(batch_id):
     
     result = [{'id': s.id, 'name': f"{s.subject_name} ({s.subject_code})"} for s in subjects]
     return jsonify(result)
+
+@staff_bp.route('/roster/<int:batch_id>', methods=['GET'])
+@staff_required
+def get_roster(batch_id):
+    batch = Batch.query.get_or_404(batch_id)
+    
+    # Check if this staff is assigned to this batch
+    staff_id = session['staff_id']
+    is_assigned = Assignment.query.filter_by(staff_id=staff_id, batch_id=batch_id).first()
+    if not is_assigned:
+        return jsonify({'error': 'You are not assigned to this batch.'}), 403
+
+    # Filter by sub-batch if parameters are provided
+    lecture_type = request.args.get('lecture_type')
+    batch_number_str = request.args.get('batch_number')
+
+    students = batch.students
+    if lecture_type and lecture_type != 'TH' and batch_number_str:
+        try:
+            batch_number = int(batch_number_str)
+            students = [s for s in batch.students if s.batch_number == batch_number]
+        except (ValueError, TypeError):
+            # Ignore invalid batch_number
+            pass
+
+    return jsonify([{'id': s.id, 'name': s.name, 'roll_no': s.roll_no, 'enrollment_no': s.enrollment_no, 'batch_number': s.batch_number} for s in students])
+
