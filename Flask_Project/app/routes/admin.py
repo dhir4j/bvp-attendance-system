@@ -353,71 +353,72 @@ def get_attendance_report():
     subject_id = request.args.get('subject_id')
     lecture_type = request.args.get('lecture_type')
 
-    if not batch_id:
-        return jsonify({'error': 'batch_id is required'}), 400
+    if not all([batch_id, subject_id, lecture_type]):
+        return jsonify({'error': 'batch_id, subject_id, and lecture_type are required'}), 400
 
     batch = Batch.query.get_or_404(batch_id)
     
-    # Base query for assignments for the entire batch
-    base_assignments_query = Assignment.query.filter_by(batch_id=batch_id)
-    if subject_id:
-        base_assignments_query = base_assignments_query.filter_by(subject_id=subject_id)
+    # Base query for assignments, filtered by all required parameters from the start
+    base_assignments_query = Assignment.query.filter_by(
+        batch_id=batch_id,
+        subject_id=subject_id,
+        lecture_type=lecture_type
+    )
 
-    # Separate assignments by theory vs practical/tutorial
-    theory_assignments = base_assignments_query.filter_by(lecture_type='TH').all()
-    practical_assignments = base_assignments_query.filter(Assignment.lecture_type.in_(['PR', 'TU'])).all()
-    
+    # All assignments that match the filter criteria
+    all_filtered_assignments = base_assignments_query.all()
+    if not all_filtered_assignments:
+        return jsonify([]) # No assignments match, so return empty report
+
     report = []
 
     for student in batch.students:
         total_lectures = 0
         attended_lectures = 0
+        
+        # Determine which assignments apply to this specific student
+        student_specific_assignments = []
+        if lecture_type == 'TH':
+            # Theory lectures apply to all students in the batch
+            student_specific_assignments = all_filtered_assignments
+        else: # For PR/TU, it only applies if the student is in a matching sub-batch
+            if student.batch_number:
+                student_specific_assignments = [
+                    a for a in all_filtered_assignments if a.batch_number == student.batch_number
+                ]
 
-        # Calculate Theory attendance (applies to all students)
-        if theory_assignments and (not lecture_type or lecture_type == 'TH'):
-            th_assignment_ids = [a.id for a in theory_assignments]
-            th_total = db.session.query(db.func.sum(TotalLectures.lecture_count)).filter(TotalLectures.assignment_id.in_(th_assignment_ids)).scalar() or 0
-            th_attended = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
-                AttendanceRecord.assignment_id.in_(th_assignment_ids),
+        if not student_specific_assignments:
+            # This student has no lectures for this filtered type (e.g., they are not in a PR batch)
+            # You might want to decide if they should appear in the report with 0/0 or be excluded.
+            # Here we'll include them with 0/0.
+            pass
+        else:
+            assignment_ids = [a.id for a in student_specific_assignments]
+
+            # Calculate total lectures for this student's specific assignments
+            total_lectures = db.session.query(db.func.sum(TotalLectures.lecture_count))\
+                .filter(TotalLectures.assignment_id.in_(assignment_ids)).scalar() or 0
+
+            # Calculate attended lectures for this student
+            attended_lectures = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
+                AttendanceRecord.assignment_id.in_(assignment_ids),
                 AttendanceRecord.student_id == student.id,
                 AttendanceRecord.status == 'present'
             ).scalar() or 0
-            total_lectures += th_total
-            attended_lectures += th_attended
-
-        # Calculate Practical/Tutorial attendance (applies only if student is in a sub-batch)
-        if student.batch_number and practical_assignments and (not lecture_type or lecture_type in ['PR', 'TU']):
-            # Filter assignments for this student's specific sub-batch
-            student_pr_assignments_query = base_assignments_query.filter(
-                Assignment.lecture_type.in_(['PR', 'TU']),
-                Assignment.batch_number == student.batch_number
-            )
-            # If a specific PR/TU lecture_type is requested, filter by it
-            if lecture_type and lecture_type in ['PR', 'TU']:
-                student_pr_assignments_query = student_pr_assignments_query.filter_by(lecture_type=lecture_type)
-            
-            student_pr_assignments = student_pr_assignments_query.all()
-            
-            if student_pr_assignments:
-                pr_assignment_ids = [a.id for a in student_pr_assignments]
-                pr_total = db.session.query(db.func.sum(TotalLectures.lecture_count)).filter(TotalLectures.assignment_id.in_(pr_assignment_ids)).scalar() or 0
-                pr_attended = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
-                    AttendanceRecord.assignment_id.in_(pr_assignment_ids),
-                    AttendanceRecord.student_id == student.id,
-                    AttendanceRecord.status == 'present'
-                ).scalar() or 0
-                total_lectures += pr_total
-                attended_lectures += pr_attended
 
         percentage = (attended_lectures / total_lectures * 100) if total_lectures > 0 else 0
-        report.append({
-            'student_id': student.id,
-            'name': student.name,
-            'roll_no': student.roll_no,
-            'attended_lectures': attended_lectures,
-            'total_lectures': total_lectures,
-            'percentage': round(percentage, 2)
-        })
+        
+        # Only include students in the report if they were supposed to have lectures of the specified type
+        # This prevents students not in a practical batch from showing up in a 'PR' report
+        if lecture_type == 'TH' or student.batch_number is not None:
+             report.append({
+                'student_id': student.id,
+                'name': student.name,
+                'roll_no': student.roll_no,
+                'attended_lectures': attended_lectures,
+                'total_lectures': total_lectures,
+                'percentage': round(percentage, 2)
+            })
 
     return jsonify(report)
 
@@ -436,3 +437,5 @@ def get_subjects_by_batch(batch_id):
     
     result = [{'id': s.id, 'name': f"{s.subject_name} ({s.subject_code})"} for s in subjects]
     return jsonify(result)
+
+    
