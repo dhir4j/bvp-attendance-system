@@ -12,7 +12,65 @@ import csv
 import io
 
 admin_bp = Blueprint('admin', __name__)
+#process multiple csv data in a dictonary instead of line by line.
+def _process_student_csv(file_stream, batch_id):
+    """
+    Helper function to process a student CSV file and associate students with a batch.
+    This is designed to be more robust and transactional.
+    """
+    try:
+        stream = io.StringIO(file_stream.read().decode("UTF8"), newline=None)
+        csv_reader = csv.DictReader(stream)
+        
+        students_to_associate = []
+        
+        for row in csv_reader:
+            # Clean up whitespace from header and row values
+            cleaned_row = {key.strip(): value.strip() for key, value in row.items()}
+            
+            enrollment_no = cleaned_row.get('enrollment_no')
+            if not enrollment_no:
+                continue # Skip rows without an enrollment number
 
+            # Find existing student or prepare a new one
+            student = Student.query.filter_by(enrollment_no=enrollment_no).first()
+            if not student:
+                student = Student(
+                    roll_no=cleaned_row.get('roll_no'),
+                    enrollment_no=enrollment_no,
+                    name=cleaned_row.get('name')
+                )
+                db.session.add(student)
+            
+            # Add/update batch_number if present in CSV
+            if 'batch_number' in cleaned_row and cleaned_row['batch_number']:
+                try:
+                    student.batch_number = int(cleaned_row['batch_number'])
+                except (ValueError, TypeError):
+                    student.batch_number = None
+
+            students_to_associate.append(student)
+
+        # First, commit any new students to the DB to ensure they have IDs
+        db.session.flush()
+
+        # Now, associate all processed students with the batch
+        batch = Batch.query.get(batch_id)
+        if batch:
+            batch.students.extend(students_to_associate)
+        
+        db.session.commit()
+
+    except (IntegrityError, OperationalError) as e:
+        db.session.rollback()
+        # Propagate the error to the main handler
+        raise e
+    except Exception as e:
+        db.session.rollback()
+        # Propagate a generic error
+        raise IOError(f"Failed to process CSV file: {e}")
+
+# --- Admin Login/Logout ---
 @admin_bp.route('/login', methods=['POST'])
 def admin_login():
     data = request.json or {}
@@ -265,55 +323,43 @@ def manage_batches():
     # POST
     data = request.form
     
-    # Check for existing batch to prevent UniqueViolation error
-    existing_batch = Batch.query.filter_by(
-        dept_name=data['dept_name'],
-        class_number=data['class_number'],
-        academic_year=data['academic_year'],
-        semester=int(data['semester'])
-    ).first()
+    try:
+        # Check for existing batch to prevent UniqueViolation error
+        existing_batch = Batch.query.filter_by(
+            dept_name=data['dept_name'],
+            class_number=data['class_number'],
+            academic_year=data['academic_year'],
+            semester=int(data['semester'])
+        ).first()
 
-    if existing_batch:
-        return jsonify({'error': 'A batch with these details already exists.'}), 409
+        if existing_batch:
+            return jsonify({'error': 'A batch with these details already exists.'}), 409
 
-    new_batch = Batch(
-        dept_name=data['dept_name'],
-        class_number=data['class_number'],
-        academic_year=data['academic_year'],
-        semester=int(data['semester'])
-    )
-    db.session.add(new_batch)
-    db.session.commit() # Commit to get the new_batch.id
+        new_batch = Batch(
+            dept_name=data['dept_name'],
+            class_number=data['class_number'],
+            academic_year=data['academic_year'],
+            semester=int(data['semester'])
+        )
+        db.session.add(new_batch)
+        db.session.commit() # Commit to get the new_batch.id
 
-    if 'student_csv' in request.files:
-        file = request.files['student_csv']
-        if file.filename != '':
-            stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-            # Use DictReader to handle headers automatically
-            csv_reader = csv.DictReader(stream)
-            for row in csv_reader:
-                student = Student.query.filter_by(enrollment_no=row['enrollment_no']).first()
-                if not student:
-                    student = Student(
-                        roll_no=row['roll_no'],
-                        enrollment_no=row['enrollment_no'],
-                        name=row['name']
-                    )
-                    db.session.add(student)
-                
-                # Add/update batch_number if present in CSV
-                if 'batch_number' in row and row['batch_number']:
-                    try:
-                        student.batch_number = int(row['batch_number'])
-                    except (ValueError, TypeError):
-                        # Handle cases where batch_number is not a valid integer
-                        student.batch_number = None
+        if 'student_csv' in request.files:
+            file = request.files['student_csv']
+            if file and file.filename != '':
+                _process_student_csv(file.stream, new_batch.id)
 
-                # Associate student with the batch
-                new_batch.students.append(student)
-            db.session.commit()
+        return jsonify({'message': 'Batch created', 'id': new_batch.id}), 201
 
-    return jsonify({'message': 'Batch created', 'id': new_batch.id}), 201
+    except (IntegrityError, OperationalError) as e:
+        db.session.rollback()
+        return jsonify({'error': f'A database error occurred: {e}'}), 500
+    except IOError as e:
+        # This will catch errors from _process_student_csv
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'An unexpected error occurred: {e}'}), 500
 
 
 @admin_bp.route('/batches/<int:batch_id>', methods=['GET', 'DELETE'])
@@ -556,7 +602,3 @@ def get_staff_assignments_report():
         })
     
     return jsonify(list(staff_assignments.values()))
-    
-    
-
-    
