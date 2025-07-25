@@ -4,7 +4,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog, Award } from "lucide-react"
+import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog, Award, Pencil } from "lucide-react"
 
 import {
   Sidebar,
@@ -32,6 +32,7 @@ const adminItems = [
     { href: "/dashboard/admin/assignments", label: "Assignments", icon: LinkIcon },
     { href: "/dashboard/admin/staff-assignments", label: "Staff Assignments", icon: UserCog },
     { href: "/dashboard/admin/report", label: "Reports", icon: FileBarChart },
+    { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },
 ]
 
 export function AppSidebar() {

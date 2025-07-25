@@ -45,6 +45,8 @@ class Student(db.Model):
     name          = db.Column(db.String, nullable=False)
     batch_number  = db.Column(db.Integer, nullable=True) # For PR/TU batches (1, 2, 3)
     batches       = relationship("Batch", secondary=student_batches, back_populates="students")
+    attendance_records = relationship("AttendanceRecord", back_populates="student", cascade="all, delete-orphan")
+
 
 class Batch(db.Model):
     __tablename__ = 'batches'
@@ -77,6 +79,8 @@ class AttendanceRecord(db.Model):
     date         = db.Column(db.Date, nullable=False)
     status       = db.Column(db.String, nullable=False) # present, absent
     lecture_count= db.Column(db.Integer, default=0, nullable=False)
+    student = relationship("Student", back_populates="attendance_records")
+
 
 class TotalLectures(db.Model):
     __tablename__ = 'total_lectures'

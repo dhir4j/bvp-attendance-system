@@ -14,7 +14,7 @@ export interface Subject {
   id: number;
   course_code: string;
   dept_code: string;
-  semester_number: number;
+  semester_number: number | string; // Allow string for form input
   subject_code: string;
   subject_name: string;
 }
@@ -81,4 +81,12 @@ export interface StaffAssignmentReport {
         lecture_type: string;
         batch_number: number | null;
     }[];
+}
+
+export interface EditableAttendanceRecord {
+  student_id: number;
+  name: string;
+  roll_no: string;
+  status: 'present' | 'absent';
+  assignment_id: number;
 }

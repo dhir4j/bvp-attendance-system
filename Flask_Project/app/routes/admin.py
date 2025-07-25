@@ -10,6 +10,7 @@ from .. import db, bcrypt
 from ..auth import admin_required
 import csv
 import io
+from datetime import datetime
 
 admin_bp = Blueprint('admin', __name__)
 #process multiple csv data in a dictonary instead of line by line.
@@ -57,7 +58,11 @@ def _process_student_csv(file_stream, batch_id):
         # Now, associate all processed students with the batch
         batch = Batch.query.get(batch_id)
         if batch:
-            batch.students.extend(students_to_associate)
+            # Avoid adding duplicates
+            existing_student_ids = {s.id for s in batch.students}
+            for student in students_to_associate:
+                if student.id not in existing_student_ids:
+                    batch.students.append(student)
         
         db.session.commit()
 
@@ -367,7 +372,7 @@ def manage_batches():
 def manage_single_batch(batch_id):
     batch = Batch.query.get_or_404(batch_id)
     if request.method == 'GET':
-        students = Student.query.join(student_batches).filter(student_batches.c.batch_id == batch_id).all()
+        students = sorted(batch.students, key=lambda s: s.roll_no)
         return jsonify({
             'id': batch.id,
             'dept_name': batch.dept_name,
@@ -602,3 +607,181 @@ def get_staff_assignments_report():
         })
     
     return jsonify(list(staff_assignments.values()))
+
+# --- Student Management in Batches ---
+
+@admin_bp.route('/batches/<int:batch_id>/students', methods=['POST'])
+@admin_required
+def add_student_to_batch(batch_id):
+    batch = Batch.query.get_or_404(batch_id)
+    data = request.json
+    
+    # Validation
+    if not all(k in data for k in ['name', 'roll_no', 'enrollment_no']):
+        return jsonify({'error': 'Missing required student data'}), 400
+
+    # Check if student with enrollment no already exists
+    student = Student.query.filter_by(enrollment_no=data['enrollment_no']).first()
+    if not student:
+        student = Student(
+            name=data['name'],
+            roll_no=data['roll_no'],
+            enrollment_no=data['enrollment_no'],
+            batch_number=data.get('batch_number')
+        )
+        db.session.add(student)
+        # Flush to get an ID for the new student
+        db.session.flush()
+
+    if student not in batch.students:
+        batch.students.append(student)
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Student with that roll number or enrollment number may already exist in another context.'}), 409
+    
+    return jsonify({
+        'id': student.id,
+        'name': student.name,
+        'roll_no': student.roll_no,
+        'enrollment_no': student.enrollment_no,
+        'batch_number': student.batch_number
+    }), 201
+
+@admin_bp.route('/students/<int:student_id>', methods=['PUT'])
+@admin_required
+def update_student(student_id):
+    student = Student.query.get_or_404(student_id)
+    data = request.json
+    
+    if 'name' in data:
+        student.name = data['name']
+    if 'roll_no' in data:
+        student.roll_no = data['roll_no']
+    if 'batch_number' in data:
+        student.batch_number = data.get('batch_number') # Handles null/empty string
+        
+    db.session.commit()
+    return jsonify({'message': 'Student updated'}), 200
+
+@admin_bp.route('/batches/<int:batch_id>/students/<int:student_id>', methods=['DELETE'])
+@admin_required
+def remove_student_from_batch(batch_id, student_id):
+    batch = Batch.query.get_or_404(batch_id)
+    student = Student.query.get_or_404(student_id)
+
+    if student in batch.students:
+        batch.students.remove(student)
+        db.session.commit()
+        return jsonify({'message': 'Student removed from batch'}), 200
+    
+    return jsonify({'error': 'Student not found in this batch'}), 404
+
+# --- Manual Attendance Editing ---
+@admin_bp.route('/attendance/session', methods=['GET'])
+@admin_required
+def get_attendance_for_session():
+    # 1. Get query parameters
+    batch_id = request.args.get('batch_id')
+    subject_id = request.args.get('subject_id')
+    lecture_type = request.args.get('lecture_type')
+    date_str = request.args.get('date') # YYYY-MM-DD
+
+    if not all([batch_id, subject_id, lecture_type, date_str]):
+        return jsonify({'error': 'batch_id, subject_id, lecture_type, and date are required'}), 400
+
+    try:
+        attendance_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+
+    # 2. Find relevant assignments
+    assignments = Assignment.query.filter_by(
+        batch_id=batch_id,
+        subject_id=subject_id,
+        lecture_type=lecture_type
+    ).all()
+
+    if not assignments:
+        return jsonify({'error': 'No matching assignments found for this class/subject/type.'}), 404
+
+    assignment_ids = [a.id for a in assignments]
+
+    # 3. Get all students for the batch
+    batch = Batch.query.get_or_404(batch_id)
+    students = sorted(batch.students, key=lambda s: s.roll_no)
+    
+    # 4. Get existing attendance records for that day
+    records = AttendanceRecord.query.filter(
+        AttendanceRecord.assignment_id.in_(assignment_ids),
+        AttendanceRecord.date == attendance_date
+    ).all()
+    
+    records_by_student = {r.student_id: r for r in records}
+
+    # 5. Build response
+    result = []
+    for s in students:
+        record = records_by_student.get(s.id)
+        # Check if student belongs to the specific sub-batch for PR/TU
+        assignment_for_student = None
+        for a in assignments:
+            if lecture_type == 'TH' or a.batch_number == s.batch_number:
+                assignment_for_student = a
+                break
+
+        if assignment_for_student:
+             result.append({
+                'student_id': s.id,
+                'name': s.name,
+                'roll_no': s.roll_no,
+                'status': record.status if record else 'absent', # Default to absent if no record found
+                'assignment_id': record.assignment_id if record else assignment_for_student.id,
+            })
+
+    return jsonify(result)
+
+@admin_bp.route('/attendance/session', methods=['POST'])
+@admin_required
+def update_attendance_for_session():
+    data = request.json
+    date_str = data.get('date')
+    updates = data.get('updates', []) # List of {'student_id', 'status', 'assignment_id'}
+
+    if not date_str or not updates:
+        return jsonify({'error': 'Date and updates are required'}), 400
+        
+    try:
+        attendance_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+
+    for update in updates:
+        record = AttendanceRecord.query.filter_by(
+            student_id=update['student_id'],
+            assignment_id=update['assignment_id'],
+            date=attendance_date
+        ).first()
+
+        if record:
+            # If status changes, adjust lecture count
+            if record.status == 'present' and update['status'] == 'absent':
+                record.lecture_count = 0 # Or handle multi-lecture days differently if needed
+            elif record.status == 'absent' and update['status'] == 'present':
+                record.lecture_count = 1 # Assuming 1 for simplicity
+            record.status = update['status']
+        else:
+            # Create a new record if one doesn't exist
+            new_record = AttendanceRecord(
+                student_id=update['student_id'],
+                assignment_id=update['assignment_id'],
+                date=attendance_date,
+                status=update['status'],
+                lecture_count=1 if update['status'] == 'present' else 0
+            )
+            db.session.add(new_record)
+
+    db.session.commit()
+    return jsonify({'message': 'Attendance updated successfully'}), 200
