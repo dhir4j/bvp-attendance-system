@@ -65,11 +65,11 @@ def clear_all_data():
     try:
         with engine.connect() as connection:
             transaction = connection.begin()
+            # Delete data from tables in the specified order
             for table_name in TABLE_ORDER:
                 try:
                     print(f"Clearing table: {table_name}...")
-                    # Use CASCADE to handle dependencies if any were missed in the ordering
-                    connection.execute(text(f'TRUNCATE TABLE "{table_name}" RESTART IDENTITY CASCADE;'))
+                    connection.execute(text(f'DELETE FROM "{table_name}";'))
                     print(f"  -  OK")
                 except Exception as e:
                     # This might happen if a table doesn't exist, which is okay.
@@ -91,3 +91,4 @@ if __name__ == "__main__":
     print("========================")
     print(f"Connected to: ...{engine.url.database}")
     clear_all_data()
+
