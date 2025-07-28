@@ -17,7 +17,8 @@ admin_bp = Blueprint('admin', __name__)
 def _process_student_csv(file_stream, batch_id):
     """
     Helper function to process a student CSV file and associate students with a batch.
-    This version includes validation to prevent duplicate roll numbers within the CSV.
+    This version includes validation to prevent duplicate roll numbers both within 
+    the CSV and in the existing database.
     """
     try:
         content = file_stream.read().decode('utf-8-sig')
@@ -31,6 +32,7 @@ def _process_student_csv(file_stream, batch_id):
 
         students_to_associate = []
         processed_roll_nos = set() # Keep track of roll numbers seen in this file
+        processed_enrollment_nos = set() # Keep track of enrollment numbers seen in this file
 
         student_data = [dict(zip(header, (cell.strip() for cell in row))) for row in reader]
 
@@ -42,16 +44,40 @@ def _process_student_csv(file_stream, batch_id):
             if not enrollment_no or not roll_no:
                 continue # Skip rows with missing essential data
 
-            # --- VALIDATION ADDED HERE ---
+            # --- VALIDATION FOR DUPLICATES WITHIN CSV ---
             if roll_no in processed_roll_nos:
-                # If roll number is already in our set, it's a duplicate in this file.
-                # Raise an error with a specific message.
                 raise ValueError(f"Duplicate roll number '{roll_no}' found in CSV at row {i}. Please correct the file.")
+            
+            if enrollment_no in processed_enrollment_nos:
+                raise ValueError(f"Duplicate enrollment number '{enrollment_no}' found in CSV at row {i}. Please correct the file.")
+            
             processed_roll_nos.add(roll_no)
-            # --- END OF VALIDATION ---
+            processed_enrollment_nos.add(enrollment_no)
 
+            # --- VALIDATION FOR DUPLICATES IN DATABASE ---
+            existing_student_with_roll = Student.query.filter_by(roll_no=roll_no).first()
+            if existing_student_with_roll:
+                # Check if this student is already associated with the current batch
+                batch = Batch.query.get(batch_id)
+                if batch and existing_student_with_roll in batch.students:
+                    # Student is already in this batch, skip
+                    continue
+                else:
+                    # Roll number exists for a different student
+                    raise ValueError(f"Roll number '{roll_no}' at row {i} already exists in the database for a different student (Name: {existing_student_with_roll.name}, Enrollment: {existing_student_with_roll.enrollment_no}). Please use a unique roll number.")
+
+            # Check if student already exists by enrollment number
             student = Student.query.filter_by(enrollment_no=enrollment_no).first()
-            if not student:
+            if student:
+                # Student exists, check if roll number matches
+                if student.roll_no != roll_no:
+                    raise ValueError(f"Student with enrollment number '{enrollment_no}' at row {i} already exists with a different roll number '{student.roll_no}'. Cannot change roll number through CSV import.")
+                
+                # Update other fields if provided
+                if 'name' in row_data and row_data['name']:
+                    student.name = row_data['name']
+            else:
+                # Create new student
                 student = Student(
                     roll_no=roll_no,
                     enrollment_no=enrollment_no,
@@ -59,6 +85,7 @@ def _process_student_csv(file_stream, batch_id):
                 )
                 db.session.add(student)
             
+            # Handle batch_number
             if 'batch_number' in row_data and row_data['batch_number']:
                 try:
                     student.batch_number = int(row_data['batch_number'])
@@ -67,8 +94,10 @@ def _process_student_csv(file_stream, batch_id):
             
             students_to_associate.append(student)
 
+        # Flush to ensure all students have IDs before associating with batch
         db.session.flush()
 
+        # Associate students with batch
         batch = Batch.query.get(batch_id)
         if batch:
             existing_student_ids = {s.id for s in batch.students}
@@ -78,7 +107,7 @@ def _process_student_csv(file_stream, batch_id):
         
         db.session.commit()
 
-    except ValueError as e: # Catch our custom validation error
+    except ValueError as e: # Catch our custom validation errors
         db.session.rollback()
         raise e # Re-raise it to be caught by the endpoint handler
     except (IntegrityError, OperationalError) as e:
