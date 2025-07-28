@@ -22,20 +22,24 @@ def _process_student_csv(file_stream, batch_id):
     try:
         # Decode the file stream and handle potential BOM (Byte Order Mark)
         content = file_stream.read().decode('utf-8-sig')
-        stream = io.StringIO(content, newline=None)
-        
-        # Clean the headers before passing to DictReader
+        stream = io.StringIO(content) # Use default newline handling
+
         reader = csv.reader(stream)
-        header = [h.strip() for h in next(reader)]
-        csv_reader = csv.DictReader(stream, fieldnames=header)
         
+        # Clean the headers from the first row
+        try:
+            header = [h.strip() for h in next(reader)]
+        except StopIteration:
+            # Handle empty file
+            return
+
         students_to_associate = []
         
-        for row in csv_reader:
-            # Clean up whitespace from row values
-            cleaned_row = {key: value.strip() for key, value in row.items()}
-            
-            enrollment_no = cleaned_row.get('enrollment_no')
+        # Create a list of dictionaries from the rest of the rows
+        student_data = [dict(zip(header, (cell.strip() for cell in row))) for row in reader]
+
+        for row_data in student_data:
+            enrollment_no = row_data.get('enrollment_no')
             if not enrollment_no:
                 continue # Skip rows without an enrollment number
 
@@ -43,16 +47,16 @@ def _process_student_csv(file_stream, batch_id):
             student = Student.query.filter_by(enrollment_no=enrollment_no).first()
             if not student:
                 student = Student(
-                    roll_no=cleaned_row.get('roll_no'),
+                    roll_no=row_data.get('roll_no'),
                     enrollment_no=enrollment_no,
-                    name=cleaned_row.get('name')
+                    name=row_data.get('name')
                 )
                 db.session.add(student)
             
             # Add/update batch_number if present in CSV
-            if 'batch_number' in cleaned_row and cleaned_row['batch_number']:
+            if 'batch_number' in row_data and row_data['batch_number']:
                 try:
-                    student.batch_number = int(cleaned_row['batch_number'])
+                    student.batch_number = int(row_data['batch_number'])
                 except (ValueError, TypeError):
                     # if batch number is invalid, it can be null
                     student.batch_number = None
@@ -794,3 +798,5 @@ def update_attendance_for_session():
     db.session.commit()
     return jsonify({'message': 'Attendance updated successfully'}), 200
 
+
+    
