@@ -17,74 +17,75 @@ admin_bp = Blueprint('admin', __name__)
 def _process_student_csv(file_stream, batch_id):
     """
     Helper function to process a student CSV file and associate students with a batch.
-    This is designed to be more robust and transactional.
+    This version includes validation to prevent duplicate roll numbers within the CSV.
     """
     try:
-        # Decode the file stream and handle potential BOM (Byte Order Mark)
         content = file_stream.read().decode('utf-8-sig')
-        stream = io.StringIO(content) # Use default newline handling
-
+        stream = io.StringIO(content)
         reader = csv.reader(stream)
-        
-        # Clean the headers from the first row
+
         try:
             header = [h.strip() for h in next(reader)]
         except StopIteration:
-            # Handle empty file
-            return
+            return # Handle empty file
 
         students_to_associate = []
-        
-        # Create a list of dictionaries from the rest of the rows
+        processed_roll_nos = set() # Keep track of roll numbers seen in this file
+
         student_data = [dict(zip(header, (cell.strip() for cell in row))) for row in reader]
 
-        for row_data in student_data:
+        # Enumerate to provide helpful error messages with row numbers
+        for i, row_data in enumerate(student_data, start=2): # start=2 for header row
             enrollment_no = row_data.get('enrollment_no')
-            if not enrollment_no:
-                continue # Skip rows without an enrollment number
+            roll_no = row_data.get('roll_no')
 
-            # Find existing student or prepare a new one
+            if not enrollment_no or not roll_no:
+                continue # Skip rows with missing essential data
+
+            # --- VALIDATION ADDED HERE ---
+            if roll_no in processed_roll_nos:
+                # If roll number is already in our set, it's a duplicate in this file.
+                # Raise an error with a specific message.
+                raise ValueError(f"Duplicate roll number '{roll_no}' found in CSV at row {i}. Please correct the file.")
+            processed_roll_nos.add(roll_no)
+            # --- END OF VALIDATION ---
+
             student = Student.query.filter_by(enrollment_no=enrollment_no).first()
             if not student:
                 student = Student(
-                    roll_no=row_data.get('roll_no'),
+                    roll_no=roll_no,
                     enrollment_no=enrollment_no,
                     name=row_data.get('name')
                 )
                 db.session.add(student)
             
-            # Add/update batch_number if present in CSV
             if 'batch_number' in row_data and row_data['batch_number']:
                 try:
                     student.batch_number = int(row_data['batch_number'])
                 except (ValueError, TypeError):
-                    # if batch number is invalid, it can be null
                     student.batch_number = None
             
             students_to_associate.append(student)
 
-        # Flush to ensure new students get IDs before we create associations
         db.session.flush()
 
-        # Now, associate all processed students with the batch
         batch = Batch.query.get(batch_id)
         if batch:
-            # Get existing student IDs in the batch to avoid duplicates
             existing_student_ids = {s.id for s in batch.students}
             for student in students_to_associate:
                 if student.id not in existing_student_ids:
                     batch.students.append(student)
         
-        # Commit everything in one transaction
         db.session.commit()
 
+    except ValueError as e: # Catch our custom validation error
+        db.session.rollback()
+        raise e # Re-raise it to be caught by the endpoint handler
     except (IntegrityError, OperationalError) as e:
         db.session.rollback()
-        # Propagate the error to the main handler
         raise e
     except Exception as e:
         db.session.rollback()
-        # Propagate a generic error
         raise IOError(f"Failed to process CSV file: {e}")
 
 # --- Admin Login/Logout ---
@@ -326,6 +327,7 @@ def update_delete_subject(sub_id):
 @admin_required
 def manage_batches():
     if request.method == 'GET':
+        # ... (GET logic remains the same) ...
         batches = Batch.query.all()
         result = [{
             'id': b.id,
@@ -341,7 +343,7 @@ def manage_batches():
     data = request.form
     
     try:
-        # Check for existing batch to prevent UniqueViolation error
+        # ... (Batch creation logic remains the same) ...
         existing_batch = Batch.query.filter_by(
             dept_name=data['dept_name'],
             class_number=data['class_number'],
@@ -359,7 +361,7 @@ def manage_batches():
             semester=int(data['semester'])
         )
         db.session.add(new_batch)
-        db.session.commit() # Commit to get the new_batch.id
+        db.session.commit()
 
         if 'student_csv' in request.files:
             file = request.files['student_csv']
@@ -367,12 +369,15 @@ def manage_batches():
                 _process_student_csv(file.stream, new_batch.id)
 
         return jsonify({'message': 'Batch created', 'id': new_batch.id}), 201
-
+    
+    # --- CATCH BLOCK UPDATED ---
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400 # Catches the duplicate roll_no error
     except (IntegrityError, OperationalError) as e:
         db.session.rollback()
         return jsonify({'error': f'A database error occurred: {e}'}), 500
     except IOError as e:
-        # This will catch errors from _process_student_csv
         return jsonify({'error': str(e)}), 400
     except Exception as e:
         db.session.rollback()
@@ -797,6 +802,3 @@ def update_attendance_for_session():
 
     db.session.commit()
     return jsonify({'message': 'Attendance updated successfully'}), 200
-
-
-    
