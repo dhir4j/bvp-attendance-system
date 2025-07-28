@@ -20,14 +20,20 @@ def _process_student_csv(file_stream, batch_id):
     This is designed to be more robust and transactional.
     """
     try:
-        stream = io.StringIO(file_stream.read().decode("UTF8"), newline=None)
-        csv_reader = csv.DictReader(stream)
+        # Decode the file stream and handle potential BOM (Byte Order Mark)
+        content = file_stream.read().decode('utf-8-sig')
+        stream = io.StringIO(content, newline=None)
+        
+        # Clean the headers before passing to DictReader
+        reader = csv.reader(stream)
+        header = [h.strip() for h in next(reader)]
+        csv_reader = csv.DictReader(stream, fieldnames=header)
         
         students_to_associate = []
         
         for row in csv_reader:
-            # Clean up whitespace from header and row values
-            cleaned_row = {key.strip(): value.strip() for key, value in row.items()}
+            # Clean up whitespace from row values
+            cleaned_row = {key: value.strip() for key, value in row.items()}
             
             enrollment_no = cleaned_row.get('enrollment_no')
             if not enrollment_no:
@@ -48,22 +54,24 @@ def _process_student_csv(file_stream, batch_id):
                 try:
                     student.batch_number = int(cleaned_row['batch_number'])
                 except (ValueError, TypeError):
+                    # if batch number is invalid, it can be null
                     student.batch_number = None
-
+            
             students_to_associate.append(student)
 
-        # First, commit any new students to the DB to ensure they have IDs
+        # Flush to ensure new students get IDs before we create associations
         db.session.flush()
 
         # Now, associate all processed students with the batch
         batch = Batch.query.get(batch_id)
         if batch:
-            # Avoid adding duplicates
+            # Get existing student IDs in the batch to avoid duplicates
             existing_student_ids = {s.id for s in batch.students}
             for student in students_to_associate:
                 if student.id not in existing_student_ids:
                     batch.students.append(student)
         
+        # Commit everything in one transaction
         db.session.commit()
 
     except (IntegrityError, OperationalError) as e:
@@ -785,3 +793,4 @@ def update_attendance_for_session():
 
     db.session.commit()
     return jsonify({'message': 'Attendance updated successfully'}), 200
+
