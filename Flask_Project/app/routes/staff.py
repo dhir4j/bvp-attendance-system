@@ -156,7 +156,7 @@ def mark_attendance():
 
     # Record for each student in the session
     for student in students_for_session:
-        status = 'absent' if student.roll_no in absent_rolls else 'present'
+        is_present = student.roll_no not in absent_rolls
         
         # Check if a record for this student, for this assignment, on this day exists
         existing_record = AttendanceRecord.query.filter_by(
@@ -166,32 +166,27 @@ def mark_attendance():
         ).first()
 
         if existing_record:
-            # Logic for a student who already has an attendance record today
-            if status == 'present':
-                # If they were marked absent before, now they are present
+            # If the student is present for this new lecture, increment their count.
+            if is_present:
+                existing_record.lecture_count += 1
+                # If they were previously marked absent for the day, update their status to present
+                # as they have now attended at least one lecture.
                 if existing_record.status == 'absent':
                     existing_record.status = 'present'
-                # Increment attended lecture count because they are present for this lecture
-                existing_record.lecture_count += 1
-            else: # status is 'absent'
-                # If they were present before, now they are absent for this lecture.
-                # Just update the status. DO NOT change the lecture_count, as that
-                # tracks their previously attended lectures for the day.
-                if existing_record.status == 'present':
-                    existing_record.status = 'absent'
-                # If they were already absent, nothing changes.
-            
+            # If they are absent for this new lecture, their attended count doesn't change.
+            # Their status remains 'present' if they attended other lectures today, or 'absent' if they've attended none.
+            # The status is only set to 'absent' if their lecture_count is 0. This is handled below.
+
         else:
             # Create a new record if one doesn't exist for the student today
-            record = AttendanceRecord(
+            new_record = AttendanceRecord(
                 assignment_id=assignment.id,
                 student_id=student.id,
                 date=today,
-                status=status,
-                # If present for this first lecture, count is 1. If absent, it's 0.
-                lecture_count=1 if status == 'present' else 0
+                status='present' if is_present else 'absent',
+                lecture_count=1 if is_present else 0
             )
-            db.session.add(record)
+            db.session.add(new_record)
 
     try:
         db.session.commit()

@@ -88,6 +88,8 @@ export interface EditableAttendanceRecord {
   name: string;
   roll_no: string;
   status: 'present' | 'absent';
+  attended_lectures: number;
+  total_lectures: number;
   assignment_id: number;
 }
 

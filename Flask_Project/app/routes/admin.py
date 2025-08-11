@@ -57,15 +57,20 @@ def _process_student_csv(file_stream, batch_id):
 
             if student:
                 # Student exists. Check if the roll number in the CSV matches the one in the DB.
+                # This is a crucial check to prevent associating the wrong student if a roll no is mistyped in the CSV
+                # but the enrollment no is correct.
                 if student.roll_no != roll_no:
-                    raise ValueError(f"Student with enrollment '{enrollment_no}' (Row {i}) exists with a different roll no ('{student.roll_no}').")
+                    # We have a conflict: Same enrollment number but different roll number.
+                    # This could be a typo in the CSV. The system should reject this to be safe.
+                     raise ValueError(f"Student with enrollment '{enrollment_no}' (Row {i}) already exists with a different roll no ('{student.roll_no}').")
             else:
                 # Student doesn't exist by enrollment_no. Check if the roll_no is taken.
                 existing_student_by_roll = Student.query.filter_by(roll_no=roll_no).first()
                 if existing_student_by_roll:
+                     # This prevents creating a new student with a roll number that is already assigned to someone else.
                      raise ValueError(f"Roll number '{roll_no}' (Row {i}) already belongs to another student ('{existing_student_by_roll.name}').")
 
-                # Create a new student if they don't exist by either identifier
+                # If both enrollment and roll are unique, create the new student.
                 student = Student(
                     roll_no=roll_no,
                     enrollment_no=enrollment_no,
@@ -73,7 +78,8 @@ def _process_student_csv(file_stream, batch_id):
                 )
                 db.session.add(student)
 
-            # Update student details
+
+            # Update student details if provided
             if 'name' in row_data and row_data['name']:
                 student.name = row_data['name']
             if 'batch_number' in row_data and row_data['batch_number']:
@@ -99,12 +105,15 @@ def _process_student_csv(file_stream, batch_id):
 
     except ValueError as e:
         db.session.rollback()
-        raise e
+        raise e # Re-raise the specific validation error
     except (IntegrityError, OperationalError) as e:
         db.session.rollback()
+        # This can happen for various reasons, like a unique constraint violation
+        # not caught by the initial checks (e.g., race conditions).
         raise e
     except Exception as e:
         db.session.rollback()
+        # Catch any other unexpected errors during file processing
         raise IOError(f"Failed to process CSV file: {e}")
 
 
@@ -757,12 +766,18 @@ def get_attendance_for_session():
         return jsonify({'error': 'No matching assignments found for this class/subject/type.'}), 404
 
     assignment_ids = [a.id for a in assignments]
+    
+    # 3. Get total lectures held for these assignments on this day
+    total_lectures_on_day = db.session.query(db.func.sum(TotalLectures.lecture_count)).filter(
+        TotalLectures.assignment_id.in_(assignment_ids),
+        TotalLectures.date == attendance_date
+    ).scalar() or 0
 
-    # 3. Get all students for the batch
+    # 4. Get all students for the batch
     batch = Batch.query.get_or_404(batch_id)
     students = sorted(batch.students, key=lambda s: s.roll_no)
     
-    # 4. Get existing attendance records for that day
+    # 5. Get existing attendance records for that day
     records = AttendanceRecord.query.filter(
         AttendanceRecord.assignment_id.in_(assignment_ids),
         AttendanceRecord.date == attendance_date
@@ -770,7 +785,7 @@ def get_attendance_for_session():
     
     records_by_student = {r.student_id: r for r in records}
 
-    # 5. Build response
+    # 6. Build response
     result = []
     for s in students:
         record = records_by_student.get(s.id)
@@ -786,7 +801,9 @@ def get_attendance_for_session():
                 'student_id': s.id,
                 'name': s.name,
                 'roll_no': s.roll_no,
-                'status': record.status if record else 'absent', # Default to absent if no record found
+                'status': record.status if record else 'absent',
+                'attended_lectures': record.lecture_count if record else 0,
+                'total_lectures': total_lectures_on_day,
                 'assignment_id': record.assignment_id if record else assignment_for_student.id,
             })
 
@@ -797,7 +814,7 @@ def get_attendance_for_session():
 def update_attendance_for_session():
     data = request.json
     date_str = data.get('date')
-    updates = data.get('updates', []) # List of {'student_id', 'status', 'assignment_id'}
+    updates = data.get('updates', []) # List of {'student_id', 'attended_lectures', 'assignment_id'}
 
     if not date_str or not updates:
         return jsonify({'error': 'Date and updates are required'}), 400
@@ -813,22 +830,22 @@ def update_attendance_for_session():
             assignment_id=update['assignment_id'],
             date=attendance_date
         ).first()
+        
+        attended_count = int(update.get('attended_lectures', 0))
 
         if record:
-            # If status changes, adjust lecture count
-            if record.status == 'present' and update['status'] == 'absent':
-                record.lecture_count = 0 # Or handle multi-lecture days differently if needed
-            elif record.status == 'absent' and update['status'] == 'present':
-                record.lecture_count = 1 # Assuming 1 for simplicity
-            record.status = update['status']
+            # Update existing record
+            record.lecture_count = attended_count
+            # Update status based on the new count
+            record.status = 'present' if attended_count > 0 else 'absent'
         else:
             # Create a new record if one doesn't exist
             new_record = AttendanceRecord(
                 student_id=update['student_id'],
                 assignment_id=update['assignment_id'],
                 date=attendance_date,
-                status=update['status'],
-                lecture_count=1 if update['status'] == 'present' else 0
+                status='present' if attended_count > 0 else 'absent',
+                lecture_count=attended_count
             )
             db.session.add(new_record)
 

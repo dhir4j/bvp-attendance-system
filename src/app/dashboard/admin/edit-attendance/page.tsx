@@ -33,7 +33,7 @@ import { Pencil, Loader2, Save } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { format } from "date-fns"
-import { Switch } from "@/components/ui/switch"
+import { Input } from "@/components/ui/input"
 
 interface SubjectIdentifier {
   id: number;
@@ -56,6 +56,7 @@ export default function EditAttendancePage() {
   const [isSubjectsLoading, setIsSubjectsLoading] = useState(false)
   const [isReportLoading, setIsReportLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false);
+  const [totalLectures, setTotalLectures] = useState(0);
 
   const fetchInitialData = useCallback(async () => {
     setIsLoading(true)
@@ -107,8 +108,16 @@ export default function EditAttendancePage() {
       const res = await fetch(`/api/admin/attendance/session?${params.toString()}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to fetch attendance data")
-      setAttendanceData(data)
-      setOriginalAttendanceData(JSON.parse(JSON.stringify(data)));
+      
+      const sessionData = data as EditableAttendanceRecord[];
+      setAttendanceData(sessionData)
+      setOriginalAttendanceData(JSON.parse(JSON.stringify(sessionData)));
+      if (sessionData.length > 0) {
+        setTotalLectures(sessionData[0].total_lectures);
+      } else {
+        setTotalLectures(0);
+      }
+
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message })
     } finally {
@@ -120,7 +129,7 @@ export default function EditAttendancePage() {
     if (selectedBatchId && selectedSubjectId && selectedLectureType && selectedDate) {
         fetchAttendance();
     }
-  }, [fetchAttendance])
+  }, [fetchAttendance, selectedBatchId, selectedSubjectId, selectedLectureType, selectedDate])
 
 
   const handleBatchChange = (batchId: string) => {
@@ -131,9 +140,12 @@ export default function EditAttendancePage() {
     fetchSubjectsForBatch(batchId)
   }
 
-  const handleStatusChange = (studentId: number, newStatus: boolean) => {
+  const handleLectureCountChange = (studentId: number, newCount: string) => {
+    const count = parseInt(newCount, 10);
+    if (isNaN(count) || count < 0) return; // Or show a toast
+
     setAttendanceData(prev => prev.map(record => 
-        record.student_id === studentId ? { ...record, status: newStatus ? 'present' : 'absent' } : record
+        record.student_id === studentId ? { ...record, attended_lectures: count } : record
     ));
   }
   
@@ -142,7 +154,7 @@ export default function EditAttendancePage() {
     
     const updates = attendanceData.map(record => ({
         student_id: record.student_id,
-        status: record.status,
+        attended_lectures: record.attended_lectures,
         assignment_id: record.assignment_id,
     }));
     
@@ -209,12 +221,13 @@ export default function EditAttendancePage() {
 
         {showReport ? (
           <div className="overflow-x-auto">
+            {totalLectures > 0 && <p className="mb-4 text-sm text-muted-foreground">Total lectures held on this day: <strong>{totalLectures}</strong></p>}
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Roll No</TableHead>
                   <TableHead>Student Name</TableHead>
-                  <TableHead className="text-right w-[100px]">Status</TableHead>
+                  <TableHead className="text-right w-[150px]">Attended Lectures</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -226,16 +239,14 @@ export default function EditAttendancePage() {
                       <TableCell className="font-medium">{row.roll_no}</TableCell>
                       <TableCell>{row.name}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Label htmlFor={`switch-${row.student_id}`} className={row.status === 'present' ? 'text-primary' : 'text-muted-foreground'}>
-                            {row.status === 'present' ? 'Present' : 'Absent'}
-                          </Label>
-                          <Switch
-                            id={`switch-${row.student_id}`}
-                            checked={row.status === 'present'}
-                            onCheckedChange={(checked) => handleStatusChange(row.student_id, checked)}
-                          />
-                        </div>
+                        <Input
+                          type="number"
+                          className="w-24 ml-auto text-right"
+                          value={row.attended_lectures}
+                          onChange={(e) => handleLectureCountChange(row.student_id, e.target.value)}
+                          max={totalLectures}
+                          min={0}
+                        />
                       </TableCell>
                     </TableRow>
                   ))
