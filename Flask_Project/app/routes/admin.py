@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, session
 from sqlalchemy.exc import IntegrityError, OperationalError
 from ..models import (
     Staff, Subject, Assignment, Department,
-    Batch, Student, student_batches, TotalLectures, AttendanceRecord
+    Batch, Student, student_batches, TotalLectures, AttendanceRecord, HOD
 )
 from .. import db, bcrypt
 from ..auth import admin_required
@@ -835,4 +835,63 @@ def update_attendance_for_session():
     db.session.commit()
     return jsonify({'message': 'Attendance updated successfully'}), 200
 
+# --- HOD Management ---
+@admin_bp.route('/hods', methods=['GET', 'POST'])
+@admin_required
+def manage_hods():
+    if request.method == 'GET':
+        hods = db.session.query(HOD, Staff, Department).join(Staff).join(Department).all()
+        result = [{
+            'id': h.id,
+            'staff_id': h.staff_id,
+            'staff_name': s.full_name,
+            'dept_code': h.dept_code,
+            'dept_name': d.dept_name,
+            'username': s.username
+        } for h, s, d in hods]
+        return jsonify(result), 200
+
+    # POST
+    data = request.json
+    if not all(k in data for k in ['staff_id', 'dept_code']):
+        return jsonify({'error': 'staff_id and dept_code are required'}), 400
     
+    # Check if staff or department are already assigned
+    if HOD.query.filter_by(staff_id=data['staff_id']).first():
+        return jsonify({'error': 'This staff member is already an HOD.'}), 409
+    if HOD.query.filter_by(dept_code=data['dept_code']).first():
+        return jsonify({'error': 'This department already has an HOD.'}), 409
+
+    new_hod = HOD(staff_id=data['staff_id'], dept_code=data['dept_code'])
+    db.session.add(new_hod)
+    try:
+        db.session.commit()
+        return jsonify({'message': 'HOD created', 'id': new_hod.id}), 201
+    except IntegrityError as e:
+        db.session.rollback()
+        return jsonify({'error': f'Database error: {e}'}), 500
+
+
+@admin_bp.route('/hods/<int:hod_id>', methods=['PUT', 'DELETE'])
+@admin_required
+def update_delete_hod(hod_id):
+    hod = HOD.query.get_or_404(hod_id)
+    
+    if request.method == 'PUT':
+        data = request.json
+        if 'dept_code' not in data:
+            return jsonify({'error': 'dept_code is required for update'}), 400
+        
+        # Check if the new department is already assigned to another HOD
+        existing_hod = HOD.query.filter(HOD.dept_code == data['dept_code'], HOD.id != hod_id).first()
+        if existing_hod:
+            return jsonify({'error': 'This department is already assigned to another HOD.'}), 409
+            
+        hod.dept_code = data['dept_code']
+        db.session.commit()
+        return jsonify({'message': 'HOD updated'}), 200
+        
+    # DELETE
+    db.session.delete(hod)
+    db.session.commit()
+    return jsonify({'message': 'HOD deleted'}), 200

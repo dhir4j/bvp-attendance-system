@@ -29,6 +29,17 @@ class Staff(db.Model):
     username      = db.Column(db.String, unique=True, nullable=False)
     password_hash = db.Column(db.String, nullable=False)
     full_name     = db.Column(db.String, nullable=False)
+    hod_details   = relationship("HOD", uselist=False, back_populates="staff", cascade="all, delete-orphan")
+
+
+class HOD(db.Model):
+    __tablename__ = 'hods'
+    id            = db.Column(db.Integer, primary_key=True)
+    staff_id      = db.Column(db.Integer, db.ForeignKey('staff.id'), unique=True, nullable=False)
+    dept_code     = db.Column(db.String, db.ForeignKey('departments.dept_code'), unique=True, nullable=False)
+    staff         = relationship("Staff", back_populates="hod_details")
+    department    = relationship("Department")
+
 
 # --- Student & Batch Models ---
 

@@ -16,3 +16,11 @@ def staff_required(f):
             return jsonify({'error': 'Login required'}), 401
         return f(*args, **kwargs)
     return decorated
+
+def hod_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('hod_id') or session.get('role') != 'hod':
+            return jsonify({'error': 'HOD login required'}), 401
+        return f(*args, **kwargs)
+    return decorated

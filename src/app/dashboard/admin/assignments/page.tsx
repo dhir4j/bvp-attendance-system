@@ -39,9 +39,11 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import type { Staff, Subject, Assignment, Batch } from "@/types"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function AssignmentsPage() {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -57,14 +59,16 @@ export default function AssignmentsPage() {
     batch_number: null as number | null
   })
 
+  const apiPrefix = useMemo(() => user?.role === 'hod' ? '/api/hod' : '/api/admin', [user?.role]);
+
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
         const [assignmentsRes, staffRes, subjectsRes, batchesRes] = await Promise.all([
-            fetch('/api/admin/assignments'),
-            fetch('/api/admin/staff'),
-            fetch('/api/admin/subjects'),
-            fetch('/api/admin/batches')
+            fetch(`${apiPrefix}/assignments`),
+            fetch(`${apiPrefix}/staff`),
+            fetch(`${apiPrefix}/subjects`),
+            fetch(`${apiPrefix}/batches`)
         ]);
         if(!assignmentsRes.ok || !staffRes.ok || !subjectsRes.ok || !batchesRes.ok) {
             throw new Error("Failed to fetch initial data");
@@ -78,7 +82,7 @@ export default function AssignmentsPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, apiPrefix]);
 
   useEffect(() => {
     fetchData();
@@ -90,7 +94,7 @@ export default function AssignmentsPage() {
         return;
     }
     try {
-        const res = await fetch("/api/admin/assignments", {
+        const res = await fetch(`${apiPrefix}/assignments`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -100,8 +104,8 @@ export default function AssignmentsPage() {
               batch_id: parseInt(newAssignment.batch_id),
             })
         });
+        const errorData = await res.json();
         if (!res.ok) {
-            const errorData = await res.json();
             throw new Error(errorData.error || "Failed to create assignment");
         }
         toast({ title: "Success", description: "Assignment created." });
@@ -116,7 +120,7 @@ export default function AssignmentsPage() {
   const handleDelete = async (assignmentId: number) => {
     if(!confirm("Are you sure? This will delete associated attendance records.")) return;
     try {
-        const res = await fetch(`/api/admin/assignments/${assignmentId}`, { method: "DELETE" });
+        const res = await fetch(`${apiPrefix}/assignments/${assignmentId}`, { method: "DELETE" });
         if(!res.ok) {
              const errorData = await res.json();
             throw new Error(errorData.error || "Failed to delete assignment");

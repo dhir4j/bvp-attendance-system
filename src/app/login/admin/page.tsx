@@ -10,10 +10,12 @@ import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import Link from 'next/link';
 import { ThemeToggle } from '@/components/app/ThemeToggle';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -30,6 +32,7 @@ export default function AdminLoginPage() {
 
       if (res.ok) {
         toast({ title: "Success", description: "Admin logged in successfully." });
+        login({ name: 'Admin', role: 'admin' });
         router.push('/dashboard/admin');
       } else {
         const errorData = await res.json();
@@ -89,9 +92,14 @@ export default function AdminLoginPage() {
               <LogIn className="mr-2 h-4 w-4" />
               {isLoading ? "Logging in..." : "Login"}
             </Button>
-            <Button variant="link" size="sm" asChild>
-                <Link href="/">Staff Login</Link>
-            </Button>
+            <div className="flex justify-between w-full">
+                <Button variant="link" size="sm" asChild>
+                    <Link href="/">Staff Login</Link>
+                </Button>
+                 <Button variant="link" size="sm" asChild>
+                    <Link href="/login/hod">HOD Login</Link>
+                </Button>
+            </div>
           </CardFooter>
         </form>
       </Card>

@@ -1,7 +1,7 @@
 // src/app/dashboard/admin/subjects/page.tsx
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { PlusCircle, MoreHorizontal, Edit, Trash2 } from "lucide-react"
 import {
   Table,
@@ -38,6 +38,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import type { Subject, Department } from "@/types"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAuth } from "@/hooks/use-auth"
 
 const initialFormData: Omit<Subject, "id" | "semester_number"> & { semester_number: string } = {
     course_code: "",
@@ -49,19 +50,22 @@ const initialFormData: Omit<Subject, "id" | "semester_number"> & { semester_numb
 
 export default function SubjectsPage() {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null)
   const [formData, setFormData] = useState(initialFormData)
+
+  const apiPrefix = useMemo(() => user?.role === 'hod' ? '/api/hod' : '/api/admin', [user?.role]);
   
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
         const [subjectsRes, deptsRes] = await Promise.all([
-          fetch("/api/admin/subjects"),
-          fetch("/api/admin/departments")
+          fetch(`${apiPrefix}/subjects`),
+          fetch("/api/admin/departments") // Depts are global, always fetch from admin
         ]);
         if (!subjectsRes.ok || !deptsRes.ok) throw new Error("Failed to fetch data");
         setSubjects(await subjectsRes.json());
@@ -71,7 +75,7 @@ export default function SubjectsPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast])
+  }, [toast, apiPrefix])
 
   useEffect(() => {
     fetchData()
@@ -88,7 +92,11 @@ export default function SubjectsPage() {
         semester_number: String(subject.semester_number)
       })
     } else {
-      setFormData(initialFormData)
+      setFormData({
+        ...initialFormData,
+        // Pre-fill department for HODs
+        dept_code: user?.role === 'hod' ? user.department_code || "" : "",
+      })
     }
     setIsModalOpen(true)
   }
@@ -99,7 +107,7 @@ export default function SubjectsPage() {
   }
 
   const handleSave = async () => {
-    const url = selectedSubject ? `/api/admin/subjects/${selectedSubject.id}` : "/api/admin/subjects";
+    const url = selectedSubject ? `${apiPrefix}/subjects/${selectedSubject.id}` : `${apiPrefix}/subjects`;
     const method = selectedSubject ? "PUT" : "POST";
 
     const semester = parseInt(formData.semester_number, 10);
@@ -119,8 +127,8 @@ export default function SubjectsPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
         });
+        const errorData = await res.json();
         if(!res.ok) {
-            const errorData = await res.json();
             throw new Error(errorData.error || `Failed to ${selectedSubject ? 'update' : 'add'} subject`);
         }
         toast({ title: "Success", description: `Subject ${selectedSubject ? 'updated' : 'added'}.` });
@@ -134,7 +142,7 @@ export default function SubjectsPage() {
   const handleDelete = async (subjectId: number) => {
     if(!confirm("Are you sure? This will also delete related assignments.")) return;
     try {
-        const res = await fetch(`/api/admin/subjects/${subjectId}`, { method: "DELETE" });
+        const res = await fetch(`${apiPrefix}/subjects/${subjectId}`, { method: "DELETE" });
         if(!res.ok) {
             const errorData = await res.json();
             throw new Error(errorData.error || "Failed to delete subject");
@@ -146,13 +154,15 @@ export default function SubjectsPage() {
     }
   }
 
+  const canDelete = user?.role === 'admin';
+
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <CardTitle>Subject Management</CardTitle>
-            <CardDescription>View, add, edit, or delete subjects.</CardDescription>
+            <CardDescription>View, add, edit, or delete subjects for your department.</CardDescription>
           </div>
           <Button onClick={() => handleOpenModal()} className="w-full sm:w-auto">
             <PlusCircle className="mr-2 h-4 w-4" />
@@ -197,9 +207,11 @@ export default function SubjectsPage() {
                         <DropdownMenuItem onClick={() => handleOpenModal(s)}>
                           <Edit className="mr-2 h-4 w-4" /> Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDelete(s.id)} className="text-destructive focus:text-destructive">
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
+                        {canDelete && (
+                            <DropdownMenuItem onClick={() => handleDelete(s.id)} className="text-destructive focus:text-destructive">
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -233,7 +245,7 @@ export default function SubjectsPage() {
             </div>
             <div className="space-y-2">
                 <Label htmlFor="dept_code">Department</Label>
-                <Select value={formData.dept_code} onValueChange={(value) => setFormData({...formData, dept_code: value})}>
+                <Select value={formData.dept_code} onValueChange={(value) => setFormData({...formData, dept_code: value})} disabled={user?.role === 'hod'}>
                     <SelectTrigger id="dept_code">
                         <SelectValue placeholder="Select Department" />
                     </SelectTrigger>

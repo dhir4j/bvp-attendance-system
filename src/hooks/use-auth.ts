@@ -7,6 +7,8 @@ const USER_STORAGE_KEY = 'bvp-auth-user';
 
 interface User {
   name: string;
+  role: 'staff' | 'admin' | 'hod';
+  department_code?: string;
 }
 
 export const useAuth = () => {

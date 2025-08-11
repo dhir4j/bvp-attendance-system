@@ -15,7 +15,7 @@ def create_app():
     CORS(app, resources={r"/*": {"origins": ["https://bvp.scrape.ink", "https://www.attendance.scrape.ink"]}})
 
     # Import models here so they are registered with SQLAlchemy
-    from .models import Student, Staff, Subject, Department, Batch, Assignment, AttendanceRecord, TotalLectures
+    from .models import Student, Staff, Subject, Department, Batch, Assignment, AttendanceRecord, TotalLectures, HOD
     
     db.init_app(app)
     bcrypt.init_app(app)
@@ -59,9 +59,11 @@ def create_app():
     from .routes.admin import admin_bp
     from .routes.staff import staff_bp
     from .routes.main import main_bp
+    from .routes.hod import hod_bp
 
     app.register_blueprint(admin_bp,   url_prefix='/admin')
     app.register_blueprint(staff_bp,   url_prefix='/staff')
     app.register_blueprint(main_bp,    url_prefix='')
+    app.register_blueprint(hod_bp,     url_prefix='/hod')
 
     return app

@@ -4,7 +4,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog, Award, Pencil } from "lucide-react"
+import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog, Award, Pencil, UserPlus } from "lucide-react"
 
 import {
   Sidebar,
@@ -16,6 +16,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar"
 import { ThemeToggle } from "./ThemeToggle"
+import { useAuth } from "@/hooks/use-auth"
 
 const staffItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -26,6 +27,7 @@ const staffItems = [
 
 const adminItems = [
     { href: "/dashboard/admin/staff", label: "Staff", icon: Users },
+    { href: "/dashboard/admin/hods", label: "HODs", icon: UserPlus },
     { href: "/dashboard/admin/departments", label: "Departments", icon: Building },
     { href: "/dashboard/admin/subjects", label: "Subjects", icon: Book },
     { href: "/dashboard/admin/batches", label: "Batches", icon: School2 },
@@ -35,12 +37,29 @@ const adminItems = [
     { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },
 ]
 
+const hodItems = [
+    { href: "/dashboard/admin/subjects", label: "Subjects", icon: Book },
+    { href: "/dashboard/admin/assignments", label: "Assignments", icon: LinkIcon },
+]
+
+
 export function AppSidebar() {
   const pathname = usePathname()
+  const { user } = useAuth()
+  
   const isAdminSection = pathname.startsWith("/dashboard/admin");
+  
+  let menuItems = staffItems;
+  if (isAdminSection) {
+      if (user?.role === 'admin') {
+          menuItems = adminItems;
+      } else if (user?.role === 'hod') {
+          // HODs see a subset of admin pages
+          menuItems = hodItems;
+      }
+  }
 
-  const menuItems = isAdminSection ? adminItems : staffItems;
-  const logoutHref = isAdminSection ? "/login/admin" : "/";
+  const logoutHref = user?.role === 'admin' ? "/login/admin" : user?.role === 'hod' ? "/login/hod" : "/";
 
   return (
     <Sidebar>

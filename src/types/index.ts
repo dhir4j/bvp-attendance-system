@@ -90,3 +90,12 @@ export interface EditableAttendanceRecord {
   status: 'present' | 'absent';
   assignment_id: number;
 }
+
+export interface HOD {
+  id: number;
+  staff_id: number;
+  staff_name: string;
+  dept_code: string;
+  dept_name: string;
+  username: string;
+}
