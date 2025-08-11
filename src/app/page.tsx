@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AtSign, KeyRound, LogIn, User, BookCheck } from 'lucide-react';
+import { AtSign, KeyRound, LogIn, User, BookCheck, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -57,11 +57,15 @@ export default function LoginPage() {
           <div className="flex flex-col items-center text-center md:items-start md:text-left">
             <BookCheck className="h-16 w-16 text-primary" />
             <h1 className="mt-4 text-4xl font-bold font-headline tracking-tighter sm:text-5xl lg:text-6xl">
-              Effortless Attendance Tracking
+              Vidyavardhini's Bhausaheb Vartak Polytechnic Attendance System
             </h1>
             <p className="mt-4 max-w-md text-lg text-muted-foreground">
               The modern solution for managing college attendance. Log in to streamline your workflow, generate reports, and focus on what matters most.
             </p>
+             <div className="mt-6 flex items-center gap-3 text-sm text-muted-foreground">
+                <Award className="h-5 w-5 text-primary" />
+                <span>Created by Mr. Dhiraj Kapse</span>
+            </div>
           </div>
 
           {/* Login Form */}
