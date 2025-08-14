@@ -1,6 +1,6 @@
 
 from flask import Blueprint, request, jsonify, session
-from .models import Staff, Subject, Assignment, Batch, Student, AttendanceRecord, TotalLectures, HOD, Department
+from ..models import Staff, Subject, Assignment, Batch, Student, AttendanceRecord, TotalLectures, HOD, Department
 from .. import db, bcrypt
 from ..auth import hod_required
 from sqlalchemy import or_
@@ -402,4 +402,3 @@ def get_attendance_for_session():
                 'assignment_id': record.assignment_id if record else assignment_for_student.id,
             })
     return jsonify(result)
-
