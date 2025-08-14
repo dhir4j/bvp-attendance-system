@@ -5,7 +5,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog, Award, Pencil } from "lucide-react"
+import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog, Award, Pencil, History } from "lucide-react"
 
 import {
   Sidebar,
@@ -21,8 +21,9 @@ import { useAuth } from "@/hooks/use-auth"
 
 const staffItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
-    { href: "/dashboard/reports", label: "Reports", icon: FileBarChart },
-    { href: "/dashboard/defaulters", label: "Defaulters", icon: UserX },
+    { href: "/dashboard/reports", label: "My Reports", icon: FileBarChart },
+    { href: "/dashboard/defaulters", label: "My Defaulters", icon: UserX },
+    { href: "/dashboard/admin/historical-attendance", label: "Historical Attendance", icon: History },
     { href: "/dashboard/credits", label: "Credits", icon: Award },
 ]
 
@@ -36,6 +37,7 @@ const adminItems = [
     { href: "/dashboard/admin/staff-assignments", label: "Staff Assignments", icon: UserCog },
     { href: "/dashboard/admin/report", label: "Department Reports", icon: FileBarChart },
     { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },
+    { href: "/dashboard/admin/historical-attendance", label: "Historical Attendance", icon: History },
 ]
 
 // HOD gets a mix of staff and admin-like features
@@ -47,6 +49,7 @@ const hodItems = [
     { href: "/dashboard/admin/staff-assignments", label: "Staff Assignments", icon: UserCog },
     { href: "/dashboard/admin/report", label: "Department Report", icon: FileBarChart },
     { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },
+    { href: "/dashboard/admin/historical-attendance", label: "Historical Attendance", icon: History },
 ];
 
 

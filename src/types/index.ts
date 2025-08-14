@@ -101,3 +101,17 @@ export interface HOD {
   dept_name: string;
   username: string;
 }
+
+export interface HistoricalAttendanceData {
+  headers: {
+    id: string;
+    label: string;
+  }[];
+  students: {
+    id: number;
+    roll_no: string;
+    enrollment_no: string;
+    name: string;
+    attendance: Record<string, 'P' | 'A' | ''>;
+  }[];
+}

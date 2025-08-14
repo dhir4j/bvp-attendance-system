@@ -10,7 +10,9 @@ from .. import db, bcrypt
 from ..auth import admin_required
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import defaultdict
+
 
 admin_bp = Blueprint('admin', __name__)
 #process multiple csv data in a dictonary instead of line by line.
@@ -912,3 +914,112 @@ def update_delete_hod(hod_id):
     db.session.delete(hod)
     db.session.commit()
     return jsonify({'message': 'HOD deleted'}), 200
+
+
+@admin_bp.route('/historical-attendance', methods=['GET'])
+@admin_required
+def get_historical_attendance():
+    # --- 1. Get and validate required parameters ---
+    subject_id = request.args.get('subject_id', type=int)
+    batch_id = request.args.get('batch_id', type=int)
+
+    if not subject_id or not batch_id:
+        return jsonify({'error': 'subject_id and batch_id are required'}), 400
+
+    # --- 2. Get and validate optional parameters ---
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+    lecture_type = request.args.get('lecture_type') # e.g., 'TH', 'PR', 'TU'
+
+    # Default to last 30 days if no dates are provided
+    try:
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else date.today()
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else end_date - timedelta(days=30)
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
+
+    # --- 3. Base Queries ---
+    batch = Batch.query.get_or_404(batch_id)
+    students = sorted(batch.students, key=lambda s: s.roll_no)
+    
+    # Base query for assignments for this subject/batch
+    assignment_query = Assignment.query.filter_by(subject_id=subject_id, batch_id=batch_id)
+    if lecture_type:
+        assignment_query = assignment_query.filter_by(lecture_type=lecture_type)
+    
+    assignments = assignment_query.all()
+    if not assignments:
+        return jsonify({'error': 'No assignments found for the given criteria.'}), 404
+    
+    assignment_ids = [a.id for a in assignments]
+
+    # --- 4. Get all relevant attendance records and total lectures in one go ---
+    all_records = AttendanceRecord.query.filter(
+        AttendanceRecord.assignment_id.in_(assignment_ids),
+        AttendanceRecord.date.between(start_date, end_date)
+    ).all()
+
+    total_lectures = TotalLectures.query.filter(
+        TotalLectures.assignment_id.in_(assignment_ids),
+        TotalLectures.date.between(start_date, end_date)
+    ).order_by(TotalLectures.date).all()
+    
+    # --- 5. Process data into the desired spreadsheet-like format ---
+    
+    # Create a map of lecture instances { 'YYYY-MM-DD-AssignmentID': sequence_number }
+    lecture_instances = {}
+    lecture_sequence = 1
+    for lec in total_lectures:
+        key = f"{lec.date.isoformat()}-{lec.assignment_id}"
+        if key not in lecture_instances:
+            lecture_instances[key] = {
+                'id': lecture_sequence,
+                'date': lec.date,
+                'assignment_id': lec.assignment_id
+            }
+            lecture_sequence += 1
+            
+    # Create a map for quick lookup: { student_id: { lecture_instance_key: status } }
+    student_attendance_map = defaultdict(dict)
+    for record in all_records:
+        key = f"{record.date.isoformat()}-{record.assignment_id}"
+        if key in lecture_instances:
+            # The status is simply 'P' or 'A'
+            status = 'P' if record.status == 'present' and record.lecture_count > 0 else 'A'
+            student_attendance_map[record.student_id][key] = status
+
+    # --- 6. Build the final response ---
+    
+    # Prepare the dynamic headers
+    headers = [{
+        'id': f"lec_{details['id']}",
+        'label': f"Lec no. {details['id']} {details['date'].strftime('%d-%m-%Y')}"
+    } for key, details in sorted(lecture_instances.items(), key=lambda item: item[1]['id'])]
+    
+    # Prepare the student rows
+    student_rows = []
+    for student in students:
+        student_data = {
+            'id': student.id,
+            'roll_no': student.roll_no,
+            'enrollment_no': student.enrollment_no,
+            'name': student.name,
+            'attendance': {}
+        }
+        
+        for key, details in lecture_instances.items():
+            # Check if this lecture applies to the student (for PR/TU)
+            assignment = next((a for a in assignments if a.id == details['assignment_id']), None)
+            if assignment and (assignment.lecture_type == 'TH' or assignment.batch_number == student.batch_number):
+                header_id = f"lec_{details['id']}"
+                # Get status from map, default to 'A' if no record exists for an applicable lecture
+                status = student_attendance_map[student.id].get(key, 'A')
+                student_data['attendance'][header_id] = status
+            
+        student_rows.append(student_data)
+
+    return jsonify({
+        'headers': headers,
+        'students': student_rows
+    })
+
