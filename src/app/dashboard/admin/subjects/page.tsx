@@ -64,20 +64,33 @@ export default function SubjectsPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-        const deptsApi = user?.role === 'hod' ? '/api/admin/departments' : `${apiPrefix}/departments`;
-        const [subjectsRes, deptsRes] = await Promise.all([
-          fetch(`${apiPrefix}/subjects`),
-          fetch(deptsApi) 
-        ]);
-        if (!subjectsRes.ok || !deptsRes.ok) throw new Error("Failed to fetch data");
+        // HODs only need their subjects. Admins need subjects and all departments.
+        const subjectPromise = fetch(`${apiPrefix}/subjects`);
+        const departmentPromise = user?.role === 'admin' 
+            ? fetch('/api/admin/departments') 
+            : Promise.resolve(new Response(JSON.stringify([]))); // For HOD, return an empty array of depts
+
+        const [subjectsRes, deptsRes] = await Promise.all([subjectPromise, departmentPromise]);
+
+        if (!subjectsRes.ok) throw new Error("Failed to fetch subjects");
+        if (!deptsRes.ok) throw new Error("Failed to fetch departments");
+        
         setSubjects(await subjectsRes.json());
-        setDepartments(await deptsRes.json());
+        
+        if (user?.role === 'admin') {
+            setDepartments(await deptsRes.json());
+        } else if (user?.role === 'hod' && user.department_code) {
+            // For HOD, create a department entry for their own department.
+            const hodDeptName = subjects[0]?.dept_code || user.department_code; // Attempt to get a real name
+            setDepartments([{ dept_code: user.department_code, dept_name: hodDeptName }]);
+        }
+
     } catch(error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
         setIsLoading(false);
     }
-  }, [toast, apiPrefix, user?.role])
+  }, [toast, apiPrefix, user?.role, user?.department_code, subjects])
 
   useEffect(() => {
     fetchData()
