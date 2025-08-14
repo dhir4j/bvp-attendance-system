@@ -64,25 +64,24 @@ export default function SubjectsPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-        // HODs only need their subjects. Admins need subjects and all departments.
         const subjectPromise = fetch(`${apiPrefix}/subjects`);
+        // Admins need all departments, HODs only need their own which is handled differently
         const departmentPromise = user?.role === 'admin' 
             ? fetch('/api/admin/departments') 
-            : Promise.resolve(new Response(JSON.stringify([]))); // For HOD, return an empty array of depts
+            : Promise.resolve(null);
 
         const [subjectsRes, deptsRes] = await Promise.all([subjectPromise, departmentPromise]);
 
         if (!subjectsRes.ok) throw new Error("Failed to fetch subjects");
-        if (!deptsRes.ok) throw new Error("Failed to fetch departments");
+        const subjectsData = await subjectsRes.json();
+        setSubjects(subjectsData);
         
-        setSubjects(await subjectsRes.json());
-        
-        if (user?.role === 'admin') {
+        if (user?.role === 'admin' && deptsRes && deptsRes.ok) {
             setDepartments(await deptsRes.json());
         } else if (user?.role === 'hod' && user.department_code) {
-            // For HOD, create a department entry for their own department.
-            const hodDeptName = subjects[0]?.dept_code || user.department_code; // Attempt to get a real name
-            setDepartments([{ dept_code: user.department_code, dept_name: hodDeptName }]);
+             // For HOD, find their department name from the fetched subjects or use the code
+            const deptName = subjectsData[0]?.dept_code || user.department_code;
+            setDepartments([{ dept_code: user.department_code, dept_name: deptName }]);
         }
 
     } catch(error: any) {
@@ -90,11 +89,13 @@ export default function SubjectsPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast, apiPrefix, user?.role, user?.department_code, subjects])
+  }, [toast, apiPrefix, user?.role, user?.department_code])
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    if (user) { // Make sure user is loaded before fetching data
+      fetchData();
+    }
+  }, [fetchData, user])
 
   const handleOpenModal = (subject: Subject | null = null) => {
     setSelectedSubject(subject)
@@ -169,6 +170,7 @@ export default function SubjectsPage() {
     }
   }
 
+  // Only admins can delete subjects, not HODs
   const canDelete = user?.role === 'admin';
 
   return (
@@ -283,3 +285,5 @@ export default function SubjectsPage() {
     </Card>
   )
 }
+
+    

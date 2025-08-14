@@ -41,7 +41,7 @@ def hod_login():
 @hod_required
 def get_hod_subjects():
     dept_code = session['department_code']
-    subjects = Subject.query.filter_by(dept_code=dept_code).all()
+    subjects = Subject.query.filter_by(dept_code=dept_code).order_by(Subject.subject_name).all()
     result = [{
         'id': sub.id, 'course_code': sub.course_code, 'dept_code': sub.dept_code,
         'semester_number': sub.semester_number, 'subject_code': sub.subject_code,
@@ -55,7 +55,7 @@ def get_hod_batches():
     # HOD needs to see all batches to assign them, but can only manage students of their dept.
     # The frontend can filter by department name if needed.
     # For now, return all batches. A stricter implementation could filter by dept_name.
-    batches = Batch.query.all()
+    batches = Batch.query.order_by(Batch.dept_name, Batch.semester, Batch.class_number).all()
     result = [{
         'id': b.id, 'dept_name': b.dept_name, 'class_number': b.class_number,
         'academic_year': b.academic_year, 'semester': b.semester,
@@ -68,7 +68,7 @@ def get_hod_batches():
 @hod_required
 def get_all_staff_for_hod():
     # HOD can view all staff to assign them to subjects in their department.
-    staff = Staff.query.all()
+    staff = Staff.query.order_by(Staff.full_name).all()
     result = [{'id': s.id, 'username': s.username, 'full_name': s.full_name} for s in staff]
     return jsonify(result), 200
 
@@ -191,3 +191,5 @@ def delete_hod_assignment(assign_id):
     db.session.delete(assignment)
     db.session.commit()
     return jsonify({'message': 'Assignment deleted'}), 200
+
+    

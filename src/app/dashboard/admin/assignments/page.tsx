@@ -86,8 +86,10 @@ export default function AssignmentsPage() {
   }, [toast, apiPrefix]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (user) { // Ensure user context is loaded before fetching
+        fetchData();
+    }
+  }, [fetchData, user]);
 
   const handleSave = async () => {
     if(!newAssignment.staff_id || !newAssignment.subject_id || !newAssignment.lecture_type || !newAssignment.batch_id) {
@@ -257,3 +259,5 @@ export default function AssignmentsPage() {
     </>
   )
 }
+
+    
