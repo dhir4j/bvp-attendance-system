@@ -4,7 +4,7 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'replace-with-secure-key')
     SQLALCHEMY_DATABASE_URI = (
         os.environ.get('DATABASE_URL')
-        or 'postgresql://dhir4j:m4dc0d3r@hard4j-4630.postgres.pythonanywhere-services.com:14630/bvpattendance'
+        or 'postgresql://dhir4j:m4dc0d3r@simple4j-4739.postgres.pythonanywhere-services.com:14739/bvpattendance'
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
