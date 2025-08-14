@@ -20,6 +20,9 @@ def create_app(config_name=None): # Added optional argument
     db.init_app(app)
     bcrypt.init_app(app)
 
+    with app.app_context():
+        db.create_all()
+
     # --- register your blueprints ---
     from .routes.admin import admin_bp
     from .routes.staff import staff_bp
