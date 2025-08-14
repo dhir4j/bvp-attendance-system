@@ -1,3 +1,4 @@
+
 // src/app/dashboard/admin/subjects/page.tsx
 "use client"
 
@@ -63,9 +64,10 @@ export default function SubjectsPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
+        const deptsApi = user?.role === 'hod' ? '/api/admin/departments' : `${apiPrefix}/departments`;
         const [subjectsRes, deptsRes] = await Promise.all([
           fetch(`${apiPrefix}/subjects`),
-          fetch("/api/admin/departments") // Depts are global, always fetch from admin
+          fetch(deptsApi) 
         ]);
         if (!subjectsRes.ok || !deptsRes.ok) throw new Error("Failed to fetch data");
         setSubjects(await subjectsRes.json());
@@ -75,7 +77,7 @@ export default function SubjectsPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast, apiPrefix])
+  }, [toast, apiPrefix, user?.role])
 
   useEffect(() => {
     fetchData()
