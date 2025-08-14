@@ -182,7 +182,7 @@ export default function EditAttendancePage() {
     }));
     
     try {
-        const res = await fetch('/api/admin/attendance/session', {
+        const res = await fetch(`${apiPrefix}/attendance/session`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

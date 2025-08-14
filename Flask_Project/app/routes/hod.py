@@ -25,7 +25,7 @@ def hod_login():
     if bcrypt.check_password_hash(hod_staff.password_hash, data['password']):
         session['role'] = 'hod'
         session['hod_id'] = hod_details.id
-        session['staff_id'] = hod_staff.id
+        session['staff_id'] = hod_staff.id # Also log in as staff
         session['department_code'] = hod_details.dept_code
         session['staff_full_name'] = hod_staff.full_name
         
@@ -402,3 +402,54 @@ def get_attendance_for_session():
                 'assignment_id': record.assignment_id if record else assignment_for_student.id,
             })
     return jsonify(result)
+
+@hod_bp.route('/attendance/session', methods=['POST'])
+@hod_required
+def update_attendance_for_session():
+    data = request.json
+    date_str = data.get('date')
+    updates = data.get('updates', [])
+    dept_code = session['department_code']
+
+    if not date_str or not updates:
+        return jsonify({'error': 'Date and updates are required'}), 400
+        
+    try:
+        attendance_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+
+    # Authorization check for the first assignment to ensure it's in the HOD's department
+    if updates:
+        first_assignment_id = updates[0].get('assignment_id')
+        assignment = Assignment.query.get(first_assignment_id)
+        if not assignment:
+             return jsonify({'error': 'Invalid assignment ID provided.'}), 400
+        subject = Subject.query.get(assignment.subject_id)
+        if not subject or subject.dept_code != dept_code:
+            return jsonify({'error': 'You are not authorized to modify attendance for this department.'}), 403
+
+    for update in updates:
+        record = AttendanceRecord.query.filter_by(
+            student_id=update['student_id'],
+            assignment_id=update['assignment_id'],
+            date=attendance_date
+        ).first()
+        
+        attended_count = int(update.get('attended_lectures', 0))
+
+        if record:
+            record.lecture_count = attended_count
+            record.status = 'present' if attended_count > 0 else 'absent'
+        else:
+            new_record = AttendanceRecord(
+                student_id=update['student_id'],
+                assignment_id=update['assignment_id'],
+                date=attendance_date,
+                status='present' if attended_count > 0 else 'absent',
+                lecture_count=attended_count
+            )
+            db.session.add(new_record)
+
+    db.session.commit()
+    return jsonify({'message': 'Attendance updated successfully'}), 200
