@@ -4,7 +4,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog, Award, Pencil, UserPlus } from "lucide-react"
+import { Home, LogOut, FileBarChart, UserX, Users, Book, Link as LinkIcon, School2, Building, UserCog, Award, Pencil } from "lucide-react"
 
 import {
   Sidebar,
@@ -27,7 +27,7 @@ const staffItems = [
 
 const adminItems = [
     { href: "/dashboard/admin/staff", label: "Staff", icon: Users },
-    { href: "/dashboard/admin/hods", label: "HODs", icon: UserPlus },
+    { href: "/dashboard/admin/hods", label: "HODs", icon: UserCog },
     { href: "/dashboard/admin/departments", label: "Departments", icon: Building },
     { href: "/dashboard/admin/subjects", label: "Subjects", icon: Book },
     { href: "/dashboard/admin/batches", label: "Batches", icon: School2 },
@@ -37,29 +37,32 @@ const adminItems = [
     { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },
 ]
 
+// HOD gets a mix of staff and admin-like features
 const hodItems = [
+    { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/dashboard/admin/subjects", label: "Subjects", icon: Book },
     { href: "/dashboard/admin/assignments", label: "Assignments", icon: LinkIcon },
-]
+    { href: "/dashboard/admin/batches", label: "Batches", icon: School2 },
+    { href: "/dashboard/admin/staff-assignments", label: "Staff Assignments", icon: UserCog },
+    { href: "/dashboard/admin/report", label: "Department Report", icon: FileBarChart },
+    { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },
+    { href: "/dashboard/reports", label: "My Reports", icon: FileBarChart },
+    { href: "/dashboard/defaulters", label: "My Defaulters", icon: UserX },
+];
 
 
 export function AppSidebar() {
   const pathname = usePathname()
   const { user } = useAuth()
   
-  const isAdminSection = pathname.startsWith("/dashboard/admin");
-  
-  let menuItems = staffItems;
-  if (isAdminSection) {
-      if (user?.role === 'admin') {
-          menuItems = adminItems;
-      } else if (user?.role === 'hod') {
-          // HODs see a subset of admin pages
-          menuItems = hodItems;
-      }
+  let menuItems = staffItems; // Default to staff
+  if (user?.role === 'admin') {
+      menuItems = adminItems;
+  } else if (user?.role === 'hod') {
+      menuItems = hodItems;
   }
 
-  const logoutHref = user?.role === 'admin' ? "/login/admin" : user?.role === 'hod' ? "/login/hod" : "/";
+  const logoutHref = "/";
 
   return (
     <Sidebar>

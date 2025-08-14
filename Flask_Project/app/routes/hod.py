@@ -52,10 +52,18 @@ def get_hod_subjects():
 @hod_bp.route('/batches', methods=['GET'])
 @hod_required
 def get_hod_batches():
-    # HOD needs to see all batches to assign them, but can only manage students of their dept.
-    # The frontend can filter by department name if needed.
-    # For now, return all batches. A stricter implementation could filter by dept_name.
-    batches = Batch.query.order_by(Batch.dept_name, Batch.semester, Batch.class_number).all()
+    # An HOD's department is identified by a code (e.g., 'AN'), but the Batch model stores the full department name (e.g., 'Animation').
+    # We need to get the HOD's department name to filter the batches correctly.
+    hod_dept_code = session.get('department_code')
+    department = db.session.query(HOD.department).filter(HOD.dept_code == hod_dept_code).first()
+
+    if not department:
+        return jsonify({'error': 'Could not determine HOD department.'}), 404
+
+    hod_dept_name = department.dept_name
+    
+    # Filter batches by the HOD's department name
+    batches = Batch.query.filter_by(dept_name=hod_dept_name).order_by(Batch.semester, Batch.class_number).all()
     result = [{
         'id': b.id, 'dept_name': b.dept_name, 'class_number': b.class_number,
         'academic_year': b.academic_year, 'semester': b.semester,
@@ -192,4 +200,177 @@ def delete_hod_assignment(assign_id):
     db.session.commit()
     return jsonify({'message': 'Assignment deleted'}), 200
 
+
+# --- Read-only data for HOD panel ---
+
+@hod_bp.route('/staff-assignments', methods=['GET'])
+@hod_required
+def get_staff_assignments_report():
+    dept_code = session['department_code']
     
+    assignments_query = db.session.query(
+        Assignment, Staff, Subject, Batch
+    ).join(Staff, Assignment.staff_id == Staff.id)\
+     .join(Subject, Assignment.subject_id == Subject.id)\
+     .join(Batch, Assignment.batch_id == Batch.id)\
+     .filter(Subject.dept_code == dept_code)\
+     .order_by(Staff.full_name, Subject.subject_name).all()
+
+    staff_assignments = {}
+
+    for assignment, staff, subject, batch in assignments_query:
+        if staff.id not in staff_assignments:
+            staff_assignments[staff.id] = {
+                'staff_id': staff.id,
+                'staff_name': staff.full_name,
+                'assignments': []
+            }
+        
+        staff_assignments[staff.id]['assignments'].append({
+            'id': assignment.id,
+            'subject_name': f"{subject.subject_name} ({subject.subject_code})",
+            'batch_name': f"{batch.dept_name} {batch.class_number} ({batch.academic_year} Sem {batch.semester})",
+            'lecture_type': assignment.lecture_type,
+            'batch_number': assignment.batch_number
+        })
+    
+    return jsonify(list(staff_assignments.values()))
+
+@hod_bp.route('/attendance-report', methods=['GET'])
+@hod_required
+def get_attendance_report():
+    # This logic is identical to the admin route, but we could add HOD-specific constraints if needed
+    batch_id = request.args.get('batch_id')
+    subject_id = request.args.get('subject_id')
+    lecture_type = request.args.get('lecture_type')
+    dept_code = session['department_code']
+
+    if not all([batch_id, subject_id, lecture_type]):
+        return jsonify({'error': 'batch_id, subject_id, and lecture_type are required'}), 400
+
+    # Authorization check: Ensure the subject belongs to the HOD's department
+    subject = Subject.query.get(subject_id)
+    if not subject or subject.dept_code != dept_code:
+        return jsonify({'error': 'You can only view reports for your department.'}), 403
+
+    batch = Batch.query.get_or_404(batch_id)
+    base_assignments_query = Assignment.query.filter_by(
+        batch_id=batch_id,
+        subject_id=subject_id,
+        lecture_type=lecture_type
+    )
+
+    all_filtered_assignments = base_assignments_query.all()
+    if not all_filtered_assignments:
+        return jsonify([])
+
+    report = []
+    for student in batch.students:
+        total_lectures = 0
+        attended_lectures = 0
+        
+        student_specific_assignments = []
+        if lecture_type == 'TH':
+            student_specific_assignments = all_filtered_assignments
+        else:
+            if student.batch_number:
+                student_specific_assignments = [a for a in all_filtered_assignments if a.batch_number == student.batch_number]
+
+        if student_specific_assignments:
+            assignment_ids = [a.id for a in student_specific_assignments]
+            total_lectures = db.session.query(db.func.sum(TotalLectures.lecture_count)).filter(TotalLectures.assignment_id.in_(assignment_ids)).scalar() or 0
+            attended_lectures = db.session.query(db.func.sum(AttendanceRecord.lecture_count)).filter(
+                AttendanceRecord.assignment_id.in_(assignment_ids),
+                AttendanceRecord.student_id == student.id,
+                AttendanceRecord.status == 'present'
+            ).scalar() or 0
+
+        percentage = (attended_lectures / total_lectures * 100) if total_lectures > 0 else 0
+        
+        if lecture_type == 'TH' or student.batch_number is not None:
+             report.append({
+                'student_id': student.id,
+                'name': student.name,
+                'roll_no': student.roll_no,
+                'attended_lectures': attended_lectures,
+                'total_lectures': total_lectures,
+                'percentage': round(percentage, 2)
+            })
+    return jsonify(report)
+
+
+@hod_bp.route('/subjects-by-batch/<int:batch_id>', methods=['GET'])
+@hod_required
+def get_subjects_by_batch(batch_id):
+    dept_code = session['department_code']
+    subjects = db.session.query(
+        Subject.id, Subject.subject_name, Subject.subject_code
+    ).join(Assignment, Subject.id == Assignment.subject_id)\
+     .filter(Assignment.batch_id == batch_id)\
+     .filter(Subject.dept_code == dept_code)\
+     .distinct().all()
+    
+    result = [{'id': s.id, 'name': f"{s.subject_name} ({s.subject_code})"} for s in subjects]
+    return jsonify(result)
+    
+@hod_bp.route('/attendance/session', methods=['GET'])
+@hod_required
+def get_attendance_for_session():
+    # This logic is identical to the admin route, but we could add HOD-specific constraints if needed
+    batch_id = request.args.get('batch_id')
+    subject_id = request.args.get('subject_id')
+    lecture_type = request.args.get('lecture_type')
+    date_str = request.args.get('date')
+    dept_code = session['department_code']
+
+    if not all([batch_id, subject_id, lecture_type, date_str]):
+        return jsonify({'error': 'All filter parameters are required'}), 400
+
+    # Authorization check
+    subject = Subject.query.get(subject_id)
+    if not subject or subject.dept_code != dept_code:
+        return jsonify({'error': 'Unauthorized to access this subject.'}), 403
+
+    try:
+        attendance_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+
+    assignments = Assignment.query.filter_by(
+        batch_id=batch_id, subject_id=subject_id, lecture_type=lecture_type
+    ).all()
+    if not assignments:
+        return jsonify({'error': 'No matching assignments found.'}), 404
+
+    assignment_ids = [a.id for a in assignments]
+    
+    total_lectures_on_day = db.session.query(db.func.sum(TotalLectures.lecture_count)).filter(
+        TotalLectures.assignment_id.in_(assignment_ids), TotalLectures.date == attendance_date
+    ).scalar() or 0
+
+    batch = Batch.query.get_or_404(batch_id)
+    students = sorted(batch.students, key=lambda s: s.roll_no)
+    
+    records = AttendanceRecord.query.filter(
+        AttendanceRecord.assignment_id.in_(assignment_ids), AttendanceRecord.date == attendance_date
+    ).all()
+    records_by_student = {r.student_id: r for r in records}
+
+    result = []
+    for s in students:
+        record = records_by_student.get(s.id)
+        assignment_for_student = None
+        for a in assignments:
+            if lecture_type == 'TH' or a.batch_number == s.batch_number:
+                assignment_for_student = a
+                break
+
+        if assignment_for_student:
+             result.append({
+                'student_id': s.id, 'name': s.name, 'roll_no': s.roll_no,
+                'status': record.status if record else 'absent',
+                'attended_lectures': record.lecture_count if record else 0,
+                'total_lectures': total_lectures_on_day,
+                'assignment_id': record.assignment_id if record else assignment_for_student.id,
+            })
+    return jsonify(result)
