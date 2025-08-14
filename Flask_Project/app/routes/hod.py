@@ -4,6 +4,7 @@ from .models import Staff, Subject, Assignment, Batch, Student, AttendanceRecord
 from .. import db, bcrypt
 from ..auth import hod_required
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError, OperationalError
 from datetime import datetime
 
 hod_bp = Blueprint('hod', __name__)
@@ -72,13 +73,40 @@ def get_hod_batches():
     return jsonify(result)
 
 
-@hod_bp.route('/staff', methods=['GET'])
+@hod_bp.route('/staff', methods=['GET', 'POST'])
 @hod_required
-def get_all_staff_for_hod():
-    # HOD can view all staff to assign them to subjects in their department.
-    staff = Staff.query.order_by(Staff.full_name).all()
-    result = [{'id': s.id, 'username': s.username, 'full_name': s.full_name} for s in staff]
-    return jsonify(result), 200
+def manage_hod_staff():
+    if request.method == 'GET':
+        staff = Staff.query.order_by(Staff.full_name).all()
+        result = [{'id': s.id, 'username': s.username, 'full_name': s.full_name} for s in staff]
+        return jsonify(result), 200
+    
+    # POST - HOD can add new staff
+    data = request.json or {}
+    if 'username' not in data or 'full_name' not in data:
+        return jsonify({'error': 'Username and full_name are required'}), 400
+
+    password = data.get('password')
+    if not password:
+        password = "defaultpassword"
+
+    pwd_hash = bcrypt.generate_password_hash(password).decode()
+    new_staff = Staff(
+        username=data['username'],
+        full_name=data['full_name'],
+        password_hash=pwd_hash
+    )
+    db.session.add(new_staff)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Username already exists'}), 400
+    except OperationalError:
+        db.session.rollback()
+        return jsonify({'error': 'Database connection error, please retry'}), 500
+
+    return jsonify({'message': 'Staff added', 'id': new_staff.id}), 201
 
 
 # --- Department-Scoped Write/Update Operations ---
@@ -374,3 +402,4 @@ def get_attendance_for_session():
                 'assignment_id': record.assignment_id if record else assignment_for_student.id,
             })
     return jsonify(result)
+

@@ -1,7 +1,7 @@
 // src/app/dashboard/admin/staff/page.tsx
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { PlusCircle, MoreHorizontal, Edit, Trash2 } from "lucide-react"
 import {
   Table,
@@ -37,19 +37,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import type { Staff } from "@/types"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function StaffPage() {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [staff, setStaff] = useState<Staff[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
   const [formData, setFormData] = useState({ id: 0, username: "", full_name: "", password: "" })
 
+  const apiPrefix = useMemo(() => user?.role === 'hod' ? '/api/hod' : '/api/admin', [user?.role]);
+
   const fetchStaff = useCallback(async () => {
+    if (!apiPrefix) return;
     setIsLoading(true);
     try {
-      const res = await fetch("/api/admin/staff")
+      const res = await fetch(`${apiPrefix}/staff`)
       if (!res.ok) throw new Error("Failed to fetch staff")
       const data = await res.json()
       setStaff(data)
@@ -58,11 +63,13 @@ export default function StaffPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast])
+  }, [toast, apiPrefix])
 
   useEffect(() => {
-    fetchStaff()
-  }, [fetchStaff])
+    if (user) {
+        fetchStaff()
+    }
+  }, [fetchStaff, user])
 
   const handleOpenModal = (staffMember: Staff | null = null) => {
     setSelectedStaff(staffMember)
@@ -80,7 +87,7 @@ export default function StaffPage() {
   }
 
   const handleSave = async () => {
-    const url = selectedStaff ? `/api/admin/staff/${selectedStaff.id}` : "/api/admin/staff";
+    const url = selectedStaff ? `${apiPrefix}/staff/${selectedStaff.id}` : `${apiPrefix}/staff`;
     const method = selectedStaff ? "PUT" : "POST";
 
     const body: any = {
@@ -126,6 +133,10 @@ export default function StaffPage() {
       toast({ variant: "destructive", title: "Error", description: error.message });
     }
   }
+  
+  const canManage = user?.role === 'admin' || user?.role === 'hod';
+  const canDeleteOrEdit = user?.role === 'admin';
+
 
   return (
     <Card>
@@ -135,10 +146,12 @@ export default function StaffPage() {
             <CardTitle>Staff Management</CardTitle>
             <CardDescription>View, add, edit, or delete staff members.</CardDescription>
           </div>
-          <Button onClick={() => handleOpenModal()} className="w-full sm:w-auto">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add Staff
-          </Button>
+          {canManage && (
+            <Button onClick={() => handleOpenModal()} className="w-full sm:w-auto">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Staff
+            </Button>
+           )}
         </div>
       </CardHeader>
       <CardContent>
@@ -148,18 +161,19 @@ export default function StaffPage() {
               <TableRow>
                 <TableHead>Full Name</TableHead>
                 <TableHead>Username</TableHead>
-                <TableHead className="w-[50px] text-right">Actions</TableHead>
+                {canDeleteOrEdit && <TableHead className="w-[50px] text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                    <TableCell colSpan={3} className="text-center">Loading...</TableCell>
+                    <TableCell colSpan={canDeleteOrEdit ? 3: 2} className="text-center">Loading...</TableCell>
                 </TableRow>
               ) : staff.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.full_name}</TableCell>
                   <TableCell>{s.username}</TableCell>
+                  {canDeleteOrEdit && (
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -178,6 +192,7 @@ export default function StaffPage() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -200,7 +215,7 @@ export default function StaffPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
-              <Input id="username" value={formData.username} onChange={(e) => setFormData({...formData, username: e.target.value})} />
+              <Input id="username" value={formData.username} onChange={(e) => setFormData({...formData, username: e.target.value})} disabled={!!selectedStaff} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
