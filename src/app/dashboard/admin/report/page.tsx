@@ -1,3 +1,4 @@
+
 // src/app/dashboard/admin/report/page.tsx
 "use client"
 
@@ -29,7 +30,7 @@ import { Button } from "@/components/ui/button"
 import type { Batch, AttendanceReport, Subject, Student } from "@/types"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileBarChart, Users, FileDown } from "lucide-react"
+import { FileBarChart, Users, FileDown, UserX } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -37,6 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useAuth } from "@/hooks/use-auth"
+import { Switch } from "@/components/ui/switch"
 
 
 interface SubjectIdentifier {
@@ -60,6 +62,7 @@ export default function ReportPage() {
   
   const [isViewStudentsModalOpen, setIsViewStudentsModalOpen] = useState(false)
   const [selectedBatchStudents, setSelectedBatchStudents] = useState<Student[]>([]);
+  const [showDefaultersOnly, setShowDefaultersOnly] = useState(false)
 
   const apiPrefix = useMemo(() => user?.role === 'hod' ? '/api/hod' : '/api/admin', [user?.role]);
 
@@ -143,6 +146,7 @@ export default function ReportPage() {
   const handleViewStudents = async () => {
     if (!selectedBatchId) return;
     try {
+      // Use admin route as HODs are also allowed to view batch details
       const res = await fetch(`/api/admin/batches/${selectedBatchId}`);
       if (!res.ok) {
         const errorData = await res.json();
@@ -156,22 +160,30 @@ export default function ReportPage() {
     }
   }
 
+  const displayedData = useMemo(() => {
+    if (showDefaultersOnly) {
+      return reportData.filter(student => student.percentage < 75);
+    }
+    return reportData;
+  }, [reportData, showDefaultersOnly]);
+
   const handleExportCSV = () => {
-    if (reportData.length === 0) {
+    if (displayedData.length === 0) {
       toast({ variant: "destructive", title: "Error", description: "No data to export." });
       return;
     }
 
     const headers = "Roll No,Student Name,Attended Lectures,Total Lectures,Percentage\n";
-    const csvContent = reportData.map(row => 
+    const csvContent = displayedData.map(row => 
       `${row.roll_no},"${row.name}",${row.attended_lectures},${row.total_lectures},${row.percentage}`
     ).join("\n");
 
     const blob = new Blob([headers + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
+    const fileName = showDefaultersOnly ? 'defaulters' : 'attendance-report';
     link.setAttribute("href", url);
-    link.setAttribute("download", `attendance-report-${selectedBatchId}-${selectedSubjectId}-${selectedLectureType}.csv`);
+    link.setAttribute("download", `${fileName}-${selectedBatchId}-${selectedSubjectId}-${selectedLectureType}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -185,14 +197,14 @@ export default function ReportPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <CardTitle>Attendance Report</CardTitle>
-              <CardDescription>View attendance percentages by batch and subject.</CardDescription>
+              <CardTitle>Department Attendance Report</CardTitle>
+              <CardDescription>View attendance percentages by batch and subject for the entire department.</CardDescription>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
               <Button variant="outline" onClick={handleViewStudents} disabled={!selectedBatchId}>
-                <Users className="mr-2 h-4 w-4" /> View Student Roster
+                <Users className="mr-2 h-4 w-4" /> View Roster
               </Button>
-               <Button variant="outline" onClick={handleExportCSV} disabled={!showReport || reportData.length === 0}>
+               <Button variant="outline" onClick={handleExportCSV} disabled={!showReport || displayedData.length === 0}>
                 <FileDown className="mr-2 h-4 w-4" /> Export CSV
               </Button>
             </div>
@@ -244,6 +256,13 @@ export default function ReportPage() {
                 </Select>
             </div>
           </div>
+          
+           {showReport && (
+            <div className="flex items-center space-x-2 mb-4">
+              <Switch id="defaulter-switch" checked={showDefaultersOnly} onCheckedChange={setShowDefaultersOnly} />
+              <Label htmlFor="defaulter-switch" className="flex items-center gap-2"><UserX className="h-4 w-4" /> Show Only Defaulters (&lt;75%)</Label>
+            </div>
+          )}
 
           {showReport ? (
               <div className="overflow-x-auto">
@@ -262,19 +281,21 @@ export default function ReportPage() {
                       <TableRow>
                           <TableCell colSpan={5} className="text-center h-24">Loading report...</TableCell>
                       </TableRow>
-                  ) : reportData.length > 0 ? (
-                      reportData.map((row) => (
-                      <TableRow key={row.student_id}>
+                  ) : displayedData.length > 0 ? (
+                      displayedData.map((row) => (
+                      <TableRow key={row.student_id} className={row.percentage < 75 ? "bg-destructive/10" : ""}>
                         <TableCell className="font-medium">{row.roll_no}</TableCell>
                         <TableCell>{row.name}</TableCell>
                         <TableCell className="text-center">{row.attended_lectures}</TableCell>
                         <TableCell className="text-center">{row.total_lectures}</TableCell>
-                        <TableCell className="text-right font-bold">{row.percentage}%</TableCell>
+                        <TableCell className={`text-right font-bold ${row.percentage < 75 ? "text-destructive" : ""}`}>{row.percentage}%</TableCell>
                       </TableRow>
                   ))
                   ) : (
                       <TableRow>
-                          <TableCell colSpan={5} className="text-center h-24">No attendance data found for the selected filters.</TableCell>
+                          <TableCell colSpan={5} className="text-center h-24">
+                            {showDefaultersOnly ? "No defaulters found for this selection." : "No attendance data found for the selected filters."}
+                          </TableCell>
                       </TableRow>
                   )}
                   </TableBody>

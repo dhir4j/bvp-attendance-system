@@ -1,3 +1,4 @@
+
 // src/components/app/AppSidebar.tsx
 "use client"
 
@@ -33,7 +34,7 @@ const adminItems = [
     { href: "/dashboard/admin/batches", label: "Batches", icon: School2 },
     { href: "/dashboard/admin/assignments", label: "Assignments", icon: LinkIcon },
     { href: "/dashboard/admin/staff-assignments", label: "Staff Assignments", icon: UserCog },
-    { href: "/dashboard/admin/report", label: "Reports", icon: FileBarChart },
+    { href: "/dashboard/admin/report", label: "Department Reports", icon: FileBarChart },
     { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },
 ]
 
@@ -46,8 +47,6 @@ const hodItems = [
     { href: "/dashboard/admin/staff-assignments", label: "Staff Assignments", icon: UserCog },
     { href: "/dashboard/admin/report", label: "Department Report", icon: FileBarChart },
     { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },
-    { href: "/dashboard/reports", label: "My Reports", icon: FileBarChart },
-    { href: "/dashboard/defaulters", label: "My Defaulters", icon: UserX },
 ];
 
 
