@@ -39,10 +39,10 @@ const adminItems = [
 
 // HOD gets a mix of staff and admin-like features
 const hodItems = [
-    { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/dashboard/admin/subjects", label: "Subjects", icon: Book },
     { href: "/dashboard/admin/assignments", label: "Assignments", icon: LinkIcon },
     { href: "/dashboard/admin/batches", label: "Batches", icon: School2 },
+    { href: "/dashboard/admin/staff", label: "Staff", icon: Users },
     { href: "/dashboard/admin/staff-assignments", label: "Staff Assignments", icon: UserCog },
     { href: "/dashboard/admin/report", label: "Department Report", icon: FileBarChart },
     { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },

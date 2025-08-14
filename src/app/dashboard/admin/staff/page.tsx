@@ -87,7 +87,7 @@ export default function StaffPage() {
   }
 
   const handleSave = async () => {
-    const url = selectedStaff ? `${apiPrefix}/staff/${selectedStaff.id}` : `${apiPrefix}/staff`;
+    const url = selectedStaff ? `/api/admin/staff/${selectedStaff.id}` : `${apiPrefix}/staff`;
     const method = selectedStaff ? "PUT" : "POST";
 
     const body: any = {

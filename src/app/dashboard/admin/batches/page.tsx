@@ -200,7 +200,8 @@ export default function BatchesPage() {
     }
   }
 
-  const canCreate = user?.role === 'admin'; // Only admins can create new batches
+  const canCreate = user?.role === 'admin' || user?.role === 'hod';
+  const canDelete = user?.role === 'admin';
 
   return (
     <>
@@ -247,7 +248,7 @@ export default function BatchesPage() {
                         <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleViewStudents(b)}><Eye className="mr-2 h-4 w-4" /> View/Edit Students</DropdownMenuItem>
-                          {canCreate && (
+                          {canDelete && (
                             <DropdownMenuItem onClick={() => handleDeleteBatch(b.id)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete Batch</DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -310,7 +311,7 @@ export default function BatchesPage() {
                     <DialogTitle>Students in {selectedBatch?.dept_name} {selectedBatch?.class_number}</DialogTitle>
                     <DialogDescription>Add, edit, or remove students from this batch.</DialogDescription>
                 </div>
-                {canCreate && (
+                {canDelete && (
                     <Button onClick={() => handleOpenStudentModal(null)}><PlusCircle className="mr-2 h-4 w-4" /> Add Student</Button>
                 )}
             </div>
@@ -323,7 +324,7 @@ export default function BatchesPage() {
                         <TableHead>Name</TableHead>
                         <TableHead>Enrollment No</TableHead>
                         <TableHead>Sub-Batch</TableHead>
-                        {canCreate && <TableHead className="text-right">Actions</TableHead>}
+                        {canDelete && <TableHead className="text-right">Actions</TableHead>}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -333,7 +334,7 @@ export default function BatchesPage() {
                             <TableCell>{s.name}</TableCell>
                             <TableCell>{s.enrollment_no}</TableCell>
                             <TableCell>{s.batch_number ?? 'N/A'}</TableCell>
-                            {canCreate && (
+                            {canDelete && (
                                 <TableCell className="text-right">
                                     <Button variant="ghost" size="icon" onClick={() => handleOpenStudentModal(s)}><Edit className="h-4 w-4" /></Button>
                                     <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleRemoveStudentFromBatch(s.id)}><Trash2 className="h-4 w-4" /></Button>
