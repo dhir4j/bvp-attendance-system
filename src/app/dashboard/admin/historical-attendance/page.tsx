@@ -226,7 +226,6 @@ export default function HistoricalAttendancePage() {
             <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={isLoading}>
               <SelectTrigger><SelectValue placeholder="All Types" /></SelectTrigger>
               <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
                   <SelectItem value="TH">Theory</SelectItem>
                   <SelectItem value="PR">Practical</SelectItem>
                   <SelectItem value="TU">Tutorial</SelectItem>

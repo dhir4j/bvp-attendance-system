@@ -1,4 +1,3 @@
-
 // src/app/dashboard/admin/report/page.tsx
 "use client"
 
@@ -66,28 +65,37 @@ export default function ReportPage() {
 
   const apiPrefix = useMemo(() => user?.role === 'hod' ? '/api/hod' : '/api/admin', [user?.role]);
 
-  const fetchBatches = useCallback(async () => {
-    setIsLoading(true)
+  const fetchInitialData = useCallback(async () => {
+    if (!user) return;
+    setIsLoading(true);
     try {
-      const res = await fetch(`${apiPrefix}/batches`)
-      if (!res.ok) throw new Error("Failed to fetch batches")
-      const data = await res.json()
-      setBatches(data)
+        const batchesRes = await fetch(`${apiPrefix}/batches`);
+        if (!batchesRes.ok) throw new Error("Failed to fetch batches");
+        setBatches(await batchesRes.json());
+        
+        // HODs need subjects loaded initially. Admins will load per-batch.
+        if (user.role === 'hod') {
+            const subjectsRes = await fetch(`${apiPrefix}/subjects`);
+            if (!subjectsRes.ok) throw new Error("Subject fetch failed");
+            const subjectsData = await subjectsRes.json();
+            setSubjects(subjectsData.map((s: Subject) => ({ ...s, name: `${s.subject_name} (${s.subject_code})` })));
+        }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message })
+        toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
-      setIsLoading(false)
+        setIsLoading(false);
     }
-  }, [toast, apiPrefix])
+}, [toast, apiPrefix, user]);
+
 
   useEffect(() => {
     if (user) {
-        fetchBatches()
+        fetchInitialData()
     }
-  }, [fetchBatches, user])
+  }, [fetchInitialData, user])
 
   const fetchSubjectsForBatch = useCallback(async (batchId: string) => {
-    if (!batchId) return;
+    if (!batchId || user?.role === 'hod') return; // Only run for admins
     setIsSubjectsLoading(true);
     setSubjects([]);
     setSelectedSubjectId("");
@@ -100,7 +108,7 @@ export default function ReportPage() {
     } finally {
       setIsSubjectsLoading(false);
     }
-  }, [toast, apiPrefix]);
+  }, [toast, apiPrefix, user?.role]);
 
   const fetchReport = useCallback(async () => {
     if (!selectedBatchId || !selectedSubjectId || !selectedLectureType) return;
@@ -140,7 +148,9 @@ export default function ReportPage() {
     setSelectedSubjectId("")
     setSelectedLectureType("")
     setReportData([])
-    fetchSubjectsForBatch(batchId);
+    if (user?.role === 'admin') {
+      fetchSubjectsForBatch(batchId);
+    }
   }
   
   const handleViewStudents = async () => {
@@ -188,6 +198,11 @@ export default function ReportPage() {
     link.click();
     document.body.removeChild(link);
   };
+  
+  const pageTitle = user?.role === 'hod' ? "Department Attendance Report" : "Attendance Report";
+  const pageDescription = user?.role === 'hod'
+    ? "View attendance percentages for batches and subjects in your department."
+    : "View attendance percentages for any batch and subject.";
 
   const showReport = selectedBatchId && selectedSubjectId && selectedLectureType;
 
@@ -197,8 +212,8 @@ export default function ReportPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <CardTitle>Department Attendance Report</CardTitle>
-              <CardDescription>View attendance percentages by batch and subject for the entire department.</CardDescription>
+              <CardTitle>{pageTitle}</CardTitle>
+              <CardDescription>{pageDescription}</CardDescription>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
               <Button variant="outline" onClick={handleViewStudents} disabled={!selectedBatchId}>
