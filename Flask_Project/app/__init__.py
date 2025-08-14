@@ -7,7 +7,7 @@ from sqlalchemy import text, inspect as sqlalchemy_inspect
 db     = SQLAlchemy()
 bcrypt = Bcrypt()
 
-def create_app():
+def create_app(config_name=None): # Added optional argument
     app = Flask(__name__)
     app.config.from_object('config.Config')
 
