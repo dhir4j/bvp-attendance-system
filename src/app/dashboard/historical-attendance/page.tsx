@@ -16,7 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CalendarIcon, FileDown, History, Loader2, Search } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { addDays, format } from 'date-fns';
-import type { Batch, Subject, StaffAssignmentsResponse } from '@/types';
+import type { Batch, Subject } from '@/types';
 
 interface SubjectIdentifier {
   id: number;
@@ -54,66 +54,71 @@ export default function HistoricalAttendancePage() {
   // Report Data
   const [historicalData, setHistoricalData] = useState<HistoricalData | null>(null);
 
+  const apiPrefix = useMemo(() => {
+    if (user?.role === 'admin') return '/api/admin';
+    if (user?.role === 'hod') return '/api/hod';
+    if (user?.role === 'staff') return '/api/staff';
+    return '';
+  }, [user?.role]);
+
   const fetchInitialData = useCallback(async () => {
-    if (!user) return;
+    if (!apiPrefix) return;
     setIsLoading(true);
     try {
-      let batchesUrl = '';
-      let subjectsUrl = '';
-      
-      if (user.role === 'admin') {
-        batchesUrl = '/api/admin/batches';
-        subjectsUrl = '/api/admin/subjects';
-      } else if (user.role === 'hod') {
-        batchesUrl = '/api/hod/batches';
-        subjectsUrl = '/api/hod/subjects';
-      } else { // staff
+      // Admins and HODs fetch all their batches and subjects upfront.
+      if (user?.role === 'admin' || user?.role === 'hod') {
+        const [batchesRes, subjectsRes] = await Promise.all([
+          fetch(`${apiPrefix}/batches`),
+          fetch(`${apiPrefix}/subjects`)
+        ]);
+
+        if (!batchesRes.ok) throw new Error('Failed to fetch batches');
+        setBatches(await batchesRes.json());
+        
+        if (!subjectsRes.ok) throw new Error('Failed to fetch subjects');
+        const subs = await subjectsRes.json()
+        setSubjects(subs.map((s: Subject) => ({id: s.id, name: `${s.subject_name} (${s.subject_code})` })));
+      } else if (user?.role === 'staff') {
+        // Staff fetch their assigned batches, subjects are fetched on batch selection.
         const assignmentsRes = await fetch('/api/staff/assignments');
         if (!assignmentsRes.ok) throw new Error('Failed to fetch assignments');
-        const assignmentsData: StaffAssignmentsResponse = await assignmentsRes.json();
+        const assignmentsData: any[] = await assignmentsRes.json();
         
         const uniqueBatches = Array.from(new Map(assignmentsData.map(a => [a.batch_id, { id: a.batch_id, dept_name: a.batch_name.split(' ')[0], class_number: a.batch_name.split(' ')[1] }])).values());
         setBatches(uniqueBatches as Batch[]);
-        
-        // For staff, subjects depend on batch, so we don't fetch them here.
-        setIsLoading(false);
-        return;
       }
-      
-      const [batchesRes, subjectsRes] = await Promise.all([
-        fetch(batchesUrl),
-        fetch(subjectsUrl)
-      ]);
-
-      if (!batchesRes.ok) throw new Error('Failed to fetch batches');
-      setBatches(await batchesRes.json());
-      
-      if (!subjectsRes.ok) throw new Error('Failed to fetch subjects');
-      const subs = await subjectsRes.json()
-      setSubjects(subs.map((s: Subject) => ({id: s.id, name: `${s.subject_name} (${s.subject_code})` })));
-
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error loading filters', description: error.message });
     } finally {
       setIsLoading(false);
     }
-  }, [user, toast]);
+  }, [user, toast, apiPrefix]);
 
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
-
+  
   const handleBatchChange = useCallback(async (batchId: string) => {
     setSelectedBatchId(batchId);
     setSelectedSubjectId('');
-    setSubjects([]); // Clear previous subjects
+    setSubjects([]);
     if (!batchId) return;
 
-    // Only staff needs to fetch subjects dynamically based on batch
     if (user?.role === 'staff') {
         setIsLoading(true);
         try {
             const res = await fetch(`/api/staff/subjects/by-batch/${batchId}`);
+            if (!res.ok) throw new Error('Failed to fetch subjects for batch');
+            setSubjects(await res.json());
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Error', description: error.message });
+        } finally {
+            setIsLoading(false);
+        }
+    } else if (user?.role === 'admin') {
+      setIsLoading(true);
+        try {
+            const res = await fetch(`/api/admin/subjects-by-batch/${batchId}`);
             if (!res.ok) throw new Error('Failed to fetch subjects for batch');
             setSubjects(await res.json());
         } catch (error: any) {
@@ -140,6 +145,7 @@ export default function HistoricalAttendancePage() {
             lecture_type: selectedLectureType,
         });
        
+        // Unified API route for historical data
         const res = await fetch(`/api/historical-attendance?${params.toString()}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to fetch historical data');

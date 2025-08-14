@@ -95,12 +95,12 @@ export default function ReportPage() {
   }, [fetchInitialData, user])
 
   const fetchSubjectsForBatch = useCallback(async (batchId: string) => {
-    if (!batchId || user?.role === 'hod') return; // Only run for admins
+    if (!batchId || user?.role !== 'admin') return; // Only run for admins
     setIsSubjectsLoading(true);
     setSubjects([]);
     setSelectedSubjectId("");
     try {
-      const res = await fetch(`${apiPrefix}/subjects-by-batch/${batchId}`);
+      const res = await fetch(`/api/admin/subjects-by-batch/${batchId}`);
       if (!res.ok) throw new Error("Failed to fetch subjects for this batch.");
       setSubjects(await res.json());
     } catch (error: any) {
@@ -108,7 +108,7 @@ export default function ReportPage() {
     } finally {
       setIsSubjectsLoading(false);
     }
-  }, [toast, apiPrefix, user?.role]);
+  }, [toast, user?.role]);
 
   const fetchReport = useCallback(async () => {
     if (!selectedBatchId || !selectedSubjectId || !selectedLectureType) return;

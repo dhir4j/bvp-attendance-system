@@ -40,8 +40,6 @@ import { useAuth } from "@/hooks/use-auth"
 interface SubjectIdentifier {
   id: number;
   name: string;
-  subject_name: string; // Add subject_name to handle different key from API
-  subject_code: string;
 }
 
 export default function EditAttendancePage() {
@@ -57,7 +55,8 @@ export default function EditAttendancePage() {
   const [selectedLectureType, setSelectedLectureType] = useState<string>("")
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
 
-  const [isLoading, setIsLoading] = useState(true)
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isSubjectsLoading, setIsSubjectsLoading] = useState(false);
   const [isReportLoading, setIsReportLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false);
   const [totalLectures, setTotalLectures] = useState(0);
@@ -66,28 +65,24 @@ export default function EditAttendancePage() {
 
   const fetchInitialData = useCallback(async () => {
     if (!user) return;
-    setIsLoading(true);
+    setIsInitialLoading(true);
     try {
-      const batchesPromise = fetch(`${apiPrefix}/batches`);
-      // HODs should get all their subjects, Admins will get them per-batch.
-      const subjectsPromise = user.role === 'hod' ? fetch(`${apiPrefix}/subjects`) : Promise.resolve(null);
-      
-      const [batchesRes, subjectsRes] = await Promise.all([batchesPromise, subjectsPromise]);
-
+      const batchesRes = await fetch(`${apiPrefix}/batches`);
       if (!batchesRes.ok) throw new Error("Failed to fetch batches");
       setBatches(await batchesRes.json());
       
-      if (subjectsRes) {
-          if (!subjectsRes.ok) throw new Error("Failed to fetch subjects");
-          const subjectsData = await subjectsRes.json();
-          const formattedSubjects = subjectsData.map((s: any) => ({...s, name: `${s.subject_name} (${s.subject_code})`}));
-          setSubjects(formattedSubjects);
+      // HODs need subjects loaded initially. Admins will load per-batch.
+      if (user.role === 'hod') {
+          const subjectsRes = await fetch(`${apiPrefix}/subjects`);
+          if (!subjectsRes.ok) throw new Error("Subject fetch failed");
+          const subjectsData: Subject[] = await subjectsRes.json();
+          setSubjects(subjectsData.map((s) => ({ ...s, name: `${s.subject_name} (${s.subject_code})` })));
       }
 
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
-      setIsLoading(false);
+      setIsInitialLoading(false);
     }
   }, [toast, apiPrefix, user]);
 
@@ -96,9 +91,8 @@ export default function EditAttendancePage() {
   }, [fetchInitialData]);
 
   const fetchSubjectsForBatch = useCallback(async (batchId: string) => {
-    // This is now only for Admins. HODs have subjects pre-loaded.
-    if (!batchId || user?.role === 'hod') return;
-    setIsLoading(true);
+    if (!batchId || user?.role !== 'admin') return;
+    setIsSubjectsLoading(true);
     setSubjects([]);
     setSelectedSubjectId("");
     try {
@@ -108,7 +102,7 @@ export default function EditAttendancePage() {
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
-      setIsLoading(false);
+      setIsSubjectsLoading(false);
     }
   }, [toast, user?.role]);
 
@@ -204,6 +198,7 @@ export default function EditAttendancePage() {
 
   const isChanged = JSON.stringify(attendanceData) !== JSON.stringify(originalAttendanceData);
   const showReport = selectedBatchId && selectedSubjectId && selectedLectureType;
+  const isLoading = isInitialLoading || isSubjectsLoading;
 
   return (
     <Card>
@@ -223,7 +218,7 @@ export default function EditAttendancePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="space-y-2">
             <Label htmlFor="batch">Batch</Label>
-            <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}><SelectTrigger id="batch"><SelectValue placeholder="Select batch" /></SelectTrigger><SelectContent>{batches.map((b) => (<SelectItem key={b.id} value={String(b.id)}>{b.dept_name} {b.class_number}</SelectItem>))}</SelectContent></Select>
+            <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isInitialLoading}><SelectTrigger id="batch"><SelectValue placeholder="Select batch" /></SelectTrigger><SelectContent>{batches.map((b) => (<SelectItem key={b.id} value={String(b.id)}>{b.dept_name} {b.class_number}</SelectItem>))}</SelectContent></Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="subject">Subject</Label>

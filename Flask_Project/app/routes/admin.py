@@ -10,7 +10,7 @@ from .. import db, bcrypt
 from ..auth import admin_required
 import csv
 import io
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from collections import defaultdict
 
 
@@ -627,6 +627,7 @@ def get_attendance_report():
 def get_subjects_by_batch(batch_id):
     """
     Returns a list of unique subjects assigned to a specific batch.
+    This is used by admins to populate subject dropdowns after a batch is selected.
     """
     subjects = db.session.query(
         Subject.id, Subject.subject_name, Subject.subject_code
