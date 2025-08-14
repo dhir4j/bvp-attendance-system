@@ -1,3 +1,4 @@
+
 // src/app/dashboard/admin/edit-attendance/page.tsx
 "use client"
 
@@ -39,6 +40,8 @@ import { useAuth } from "@/hooks/use-auth"
 interface SubjectIdentifier {
   id: number;
   name: string;
+  subject_name: string; // Add subject_name to handle different key from API
+  subject_code: string;
 }
 
 export default function EditAttendancePage() {
@@ -55,7 +58,6 @@ export default function EditAttendancePage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
 
   const [isLoading, setIsLoading] = useState(true)
-  const [isSubjectsLoading, setIsSubjectsLoading] = useState(false)
   const [isReportLoading, setIsReportLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false);
   const [totalLectures, setTotalLectures] = useState(0);
@@ -63,39 +65,52 @@ export default function EditAttendancePage() {
   const apiPrefix = useMemo(() => user?.role === 'hod' ? '/api/hod' : '/api/admin', [user?.role]);
 
   const fetchInitialData = useCallback(async () => {
-    setIsLoading(true)
+    if (!user) return;
+    setIsLoading(true);
     try {
-      const res = await fetch(`${apiPrefix}/batches`)
-      if (!res.ok) throw new Error("Failed to fetch batches")
-      setBatches(await res.json())
+      const batchesPromise = fetch(`${apiPrefix}/batches`);
+      // HODs should get all their subjects, Admins will get them per-batch.
+      const subjectsPromise = user.role === 'hod' ? fetch(`${apiPrefix}/subjects`) : Promise.resolve(null);
+      
+      const [batchesRes, subjectsRes] = await Promise.all([batchesPromise, subjectsPromise]);
+
+      if (!batchesRes.ok) throw new Error("Failed to fetch batches");
+      setBatches(await batchesRes.json());
+      
+      if (subjectsRes) {
+          if (!subjectsRes.ok) throw new Error("Failed to fetch subjects");
+          const subjectsData = await subjectsRes.json();
+          const formattedSubjects = subjectsData.map((s: any) => ({...s, name: `${s.subject_name} (${s.subject_code})`}));
+          setSubjects(formattedSubjects);
+      }
+
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message })
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [toast, apiPrefix])
+  }, [toast, apiPrefix, user]);
 
   useEffect(() => {
-    if (user) {
-        fetchInitialData()
-    }
-  }, [fetchInitialData, user])
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   const fetchSubjectsForBatch = useCallback(async (batchId: string) => {
-    if (!batchId) return;
-    setIsSubjectsLoading(true)
-    setSubjects([])
-    setSelectedSubjectId("")
+    // This is now only for Admins. HODs have subjects pre-loaded.
+    if (!batchId || user?.role === 'hod') return;
+    setIsLoading(true);
+    setSubjects([]);
+    setSelectedSubjectId("");
     try {
-      const res = await fetch(`${apiPrefix}/subjects-by-batch/${batchId}`)
-      if (!res.ok) throw new Error("Failed to fetch subjects.")
-      setSubjects(await res.json())
+      const res = await fetch(`/api/admin/subjects-by-batch/${batchId}`);
+      if (!res.ok) throw new Error("Failed to fetch subjects.");
+      setSubjects(await res.json());
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message })
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
-      setIsSubjectsLoading(false)
+      setIsLoading(false);
     }
-  }, [toast, apiPrefix])
+  }, [toast, user?.role]);
 
   const fetchAttendance = useCallback(async () => {
     if (!selectedBatchId || !selectedSubjectId || !selectedLectureType || !selectedDate) return
@@ -143,7 +158,9 @@ export default function EditAttendancePage() {
     setSelectedSubjectId("")
     setSelectedLectureType("")
     setAttendanceData([])
-    fetchSubjectsForBatch(batchId)
+    if (user?.role === 'admin') {
+      fetchSubjectsForBatch(batchId)
+    }
   }
 
   const handleLectureCountChange = (studentId: number, newCount: string) => {
@@ -210,7 +227,7 @@ export default function EditAttendancePage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="subject">Subject</Label>
-            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={!selectedBatchId || isSubjectsLoading}><SelectTrigger id="subject"><SelectValue placeholder="Select subject" /></SelectTrigger><SelectContent>{subjects.map((s) => (<SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>))}</SelectContent></Select>
+            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={!selectedBatchId || isLoading}><SelectTrigger id="subject"><SelectValue placeholder="Select subject" /></SelectTrigger><SelectContent>{subjects.map((s) => (<SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>))}</SelectContent></Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="lecture_type">Lecture Type</Label>
