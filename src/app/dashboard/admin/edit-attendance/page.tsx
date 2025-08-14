@@ -1,7 +1,7 @@
 // src/app/dashboard/admin/edit-attendance/page.tsx
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   Table,
   TableBody,
@@ -34,6 +34,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar"
 import { format } from "date-fns"
 import { Input } from "@/components/ui/input"
+import { useAuth } from "@/hooks/use-auth"
 
 interface SubjectIdentifier {
   id: number;
@@ -42,6 +43,7 @@ interface SubjectIdentifier {
 
 export default function EditAttendancePage() {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [batches, setBatches] = useState<Batch[]>([])
   const [subjects, setSubjects] = useState<SubjectIdentifier[]>([])
   const [attendanceData, setAttendanceData] = useState<EditableAttendanceRecord[]>([])
@@ -58,10 +60,12 @@ export default function EditAttendancePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [totalLectures, setTotalLectures] = useState(0);
 
+  const apiPrefix = useMemo(() => user?.role === 'hod' ? '/api/hod' : '/api/admin', [user?.role]);
+
   const fetchInitialData = useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await fetch('/api/admin/batches')
+      const res = await fetch(`${apiPrefix}/batches`)
       if (!res.ok) throw new Error("Failed to fetch batches")
       setBatches(await res.json())
     } catch (error: any) {
@@ -69,11 +73,13 @@ export default function EditAttendancePage() {
     } finally {
       setIsLoading(false)
     }
-  }, [toast])
+  }, [toast, apiPrefix])
 
   useEffect(() => {
-    fetchInitialData()
-  }, [fetchInitialData])
+    if (user) {
+        fetchInitialData()
+    }
+  }, [fetchInitialData, user])
 
   const fetchSubjectsForBatch = useCallback(async (batchId: string) => {
     if (!batchId) return;
@@ -81,7 +87,7 @@ export default function EditAttendancePage() {
     setSubjects([])
     setSelectedSubjectId("")
     try {
-      const res = await fetch(`/api/admin/subjects/by-batch/${batchId}`)
+      const res = await fetch(`${apiPrefix}/subjects-by-batch/${batchId}`)
       if (!res.ok) throw new Error("Failed to fetch subjects.")
       setSubjects(await res.json())
     } catch (error: any) {
@@ -89,7 +95,7 @@ export default function EditAttendancePage() {
     } finally {
       setIsSubjectsLoading(false)
     }
-  }, [toast])
+  }, [toast, apiPrefix])
 
   const fetchAttendance = useCallback(async () => {
     if (!selectedBatchId || !selectedSubjectId || !selectedLectureType || !selectedDate) return
@@ -105,7 +111,7 @@ export default function EditAttendancePage() {
     })
 
     try {
-      const res = await fetch(`/api/admin/attendance/session?${params.toString()}`)
+      const res = await fetch(`${apiPrefix}/attendance/session?${params.toString()}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to fetch attendance data")
       
@@ -123,7 +129,7 @@ export default function EditAttendancePage() {
     } finally {
       setIsReportLoading(false)
     }
-  }, [toast, selectedBatchId, selectedSubjectId, selectedLectureType, selectedDate])
+  }, [toast, selectedBatchId, selectedSubjectId, selectedLectureType, selectedDate, apiPrefix])
   
   useEffect(() => {
     if (selectedBatchId && selectedSubjectId && selectedLectureType && selectedDate) {

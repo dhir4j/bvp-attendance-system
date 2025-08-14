@@ -1,7 +1,7 @@
 // src/app/dashboard/admin/batches/page.tsx
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { PlusCircle, MoreHorizontal, Eye, Trash2, Edit } from "lucide-react"
 import {
   Table,
@@ -38,11 +38,13 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import type { Batch, Department, Student } from "@/types"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAuth } from "@/hooks/use-auth"
 
 type StudentFormData = Omit<Student, 'id'>
 
 export default function BatchesPage() {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [batches, setBatches] = useState<Batch[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -69,26 +71,37 @@ export default function BatchesPage() {
   })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const apiPrefix = useMemo(() => user?.role === 'hod' ? '/api/hod' : '/api/admin', [user?.role]);
+
   const fetchData = useCallback(async () => {
     setIsLoading(true)
     try {
+      // HODs get their batches, Admins get all batches and departments
+      const batchesPromise = fetch(`${apiPrefix}/batches`);
+      const deptsPromise = user?.role === 'admin' ? fetch('/api/admin/departments') : Promise.resolve(null);
+
       const [batchesRes, deptsRes] = await Promise.all([
-        fetch("/api/admin/batches"),
-        fetch("/api/admin/departments"),
+        batchesPromise,
+        deptsPromise,
       ])
-      if (!batchesRes.ok || !deptsRes.ok) throw new Error("Failed to fetch initial data")
+      if (!batchesRes.ok) throw new Error("Failed to fetch batches")
       setBatches(await batchesRes.json())
-      setDepartments(await deptsRes.json())
+      
+      if (deptsRes && deptsRes.ok) {
+        setDepartments(await deptsRes.json())
+      }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message })
     } finally {
       setIsLoading(false)
     }
-  }, [toast])
+  }, [toast, apiPrefix, user?.role])
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    if (user) {
+        fetchData()
+    }
+  }, [fetchData, user])
 
   const handleCreateBatch = async () => {
     const { dept_name, class_number, academic_year, semester } = createBatchFormData
@@ -132,6 +145,7 @@ export default function BatchesPage() {
   const handleViewStudents = async (batch: Batch) => {
     setSelectedBatch(batch)
     try {
+      // Admins can see any batch, HODs can only see their own.
       const res = await fetch(`/api/admin/batches/${batch.id}`)
       if (!res.ok) throw new Error((await res.json()).error || "Failed to fetch students")
       const data = await res.json()
@@ -186,6 +200,8 @@ export default function BatchesPage() {
     }
   }
 
+  const canCreate = user?.role === 'admin'; // Only admins can create new batches
+
   return (
     <>
       <Card>
@@ -195,10 +211,12 @@ export default function BatchesPage() {
               <CardTitle>Batch Management</CardTitle>
               <CardDescription>Create batches and manage student lists.</CardDescription>
             </div>
-            <Button onClick={() => setIsCreateBatchModalOpen(true)} className="w-full sm:w-auto">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create Batch
-            </Button>
+            {canCreate && (
+                <Button onClick={() => setIsCreateBatchModalOpen(true)} className="w-full sm:w-auto">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Create Batch
+                </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -229,7 +247,9 @@ export default function BatchesPage() {
                         <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleViewStudents(b)}><Eye className="mr-2 h-4 w-4" /> View/Edit Students</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDeleteBatch(b.id)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete Batch</DropdownMenuItem>
+                          {canCreate && (
+                            <DropdownMenuItem onClick={() => handleDeleteBatch(b.id)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete Batch</DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -290,7 +310,9 @@ export default function BatchesPage() {
                     <DialogTitle>Students in {selectedBatch?.dept_name} {selectedBatch?.class_number}</DialogTitle>
                     <DialogDescription>Add, edit, or remove students from this batch.</DialogDescription>
                 </div>
-                <Button onClick={() => handleOpenStudentModal(null)}><PlusCircle className="mr-2 h-4 w-4" /> Add Student</Button>
+                {canCreate && (
+                    <Button onClick={() => handleOpenStudentModal(null)}><PlusCircle className="mr-2 h-4 w-4" /> Add Student</Button>
+                )}
             </div>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto">
@@ -301,7 +323,7 @@ export default function BatchesPage() {
                         <TableHead>Name</TableHead>
                         <TableHead>Enrollment No</TableHead>
                         <TableHead>Sub-Batch</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        {canCreate && <TableHead className="text-right">Actions</TableHead>}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -311,10 +333,12 @@ export default function BatchesPage() {
                             <TableCell>{s.name}</TableCell>
                             <TableCell>{s.enrollment_no}</TableCell>
                             <TableCell>{s.batch_number ?? 'N/A'}</TableCell>
-                            <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" onClick={() => handleOpenStudentModal(s)}><Edit className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleRemoveStudentFromBatch(s.id)}><Trash2 className="h-4 w-4" /></Button>
-                            </TableCell>
+                            {canCreate && (
+                                <TableCell className="text-right">
+                                    <Button variant="ghost" size="icon" onClick={() => handleOpenStudentModal(s)}><Edit className="h-4 w-4" /></Button>
+                                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleRemoveStudentFromBatch(s.id)}><Trash2 className="h-4 w-4" /></Button>
+                                </TableCell>
+                            )}
                         </TableRow>
                     ))}
                 </TableBody>

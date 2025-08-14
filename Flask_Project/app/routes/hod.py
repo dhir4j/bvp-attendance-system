@@ -1,6 +1,6 @@
 
 from flask import Blueprint, request, jsonify, session
-from ..models import Staff, Subject, Assignment, Batch, Student, AttendanceRecord, TotalLectures, HOD
+from .models import Staff, Subject, Assignment, Batch, Student, AttendanceRecord, TotalLectures, HOD, Department
 from .. import db, bcrypt
 from ..auth import hod_required
 from sqlalchemy import or_
@@ -55,7 +55,7 @@ def get_hod_batches():
     # An HOD's department is identified by a code (e.g., 'AN'), but the Batch model stores the full department name (e.g., 'Animation').
     # We need to get the HOD's department name to filter the batches correctly.
     hod_dept_code = session.get('department_code')
-    department = db.session.query(HOD.department).filter(HOD.dept_code == hod_dept_code).first()
+    department = Department.query.filter_by(dept_code=hod_dept_code).first()
 
     if not department:
         return jsonify({'error': 'Could not determine HOD department.'}), 404

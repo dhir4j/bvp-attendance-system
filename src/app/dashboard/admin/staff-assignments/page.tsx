@@ -1,7 +1,7 @@
 // src/app/dashboard/admin/staff-assignments/page.tsx
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   Table,
   TableBody,
@@ -21,16 +21,20 @@ import { useToast } from "@/hooks/use-toast"
 import type { StaffAssignmentReport } from "@/types"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { UserCog } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function StaffAssignmentsReportPage() {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [report, setReport] = useState<StaffAssignmentReport[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  const apiPrefix = useMemo(() => user?.role === 'hod' ? '/api/hod' : '/api/admin', [user?.role]);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-        const res = await fetch('/api/admin/staff-assignments');
+        const res = await fetch(`${apiPrefix}/staff-assignments`);
         if(!res.ok) {
             throw new Error("Failed to fetch staff assignments report");
         }
@@ -40,11 +44,13 @@ export default function StaffAssignmentsReportPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, apiPrefix]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (user) {
+        fetchData();
+    }
+  }, [fetchData, user]);
 
   return (
     <Card>

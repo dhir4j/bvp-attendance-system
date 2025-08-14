@@ -36,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useAuth } from "@/hooks/use-auth"
 
 
 interface SubjectIdentifier {
@@ -45,6 +46,7 @@ interface SubjectIdentifier {
 
 export default function ReportPage() {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [batches, setBatches] = useState<Batch[]>([])
   const [subjects, setSubjects] = useState<SubjectIdentifier[]>([])
   const [selectedBatchId, setSelectedBatchId] = useState<string>("")
@@ -59,10 +61,12 @@ export default function ReportPage() {
   const [isViewStudentsModalOpen, setIsViewStudentsModalOpen] = useState(false)
   const [selectedBatchStudents, setSelectedBatchStudents] = useState<Student[]>([]);
 
+  const apiPrefix = useMemo(() => user?.role === 'hod' ? '/api/hod' : '/api/admin', [user?.role]);
+
   const fetchBatches = useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await fetch('/api/admin/batches')
+      const res = await fetch(`${apiPrefix}/batches`)
       if (!res.ok) throw new Error("Failed to fetch batches")
       const data = await res.json()
       setBatches(data)
@@ -71,11 +75,13 @@ export default function ReportPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [toast])
+  }, [toast, apiPrefix])
 
   useEffect(() => {
-    fetchBatches()
-  }, [fetchBatches])
+    if (user) {
+        fetchBatches()
+    }
+  }, [fetchBatches, user])
 
   const fetchSubjectsForBatch = useCallback(async (batchId: string) => {
     if (!batchId) return;
@@ -83,7 +89,7 @@ export default function ReportPage() {
     setSubjects([]);
     setSelectedSubjectId("");
     try {
-      const res = await fetch(`/api/admin/subjects/by-batch/${batchId}`);
+      const res = await fetch(`${apiPrefix}/subjects-by-batch/${batchId}`);
       if (!res.ok) throw new Error("Failed to fetch subjects for this batch.");
       setSubjects(await res.json());
     } catch (error: any) {
@@ -91,7 +97,7 @@ export default function ReportPage() {
     } finally {
       setIsSubjectsLoading(false);
     }
-  }, [toast]);
+  }, [toast, apiPrefix]);
 
   const fetchReport = useCallback(async () => {
     if (!selectedBatchId || !selectedSubjectId || !selectedLectureType) return;
@@ -106,7 +112,7 @@ export default function ReportPage() {
     });
 
     try {
-      const res = await fetch(`/api/admin/attendance-report?${params.toString()}`)
+      const res = await fetch(`${apiPrefix}/attendance-report?${params.toString()}`)
       const data = await res.json()
       if (!res.ok) {
         throw new Error(data.error || "Failed to fetch attendance report")
@@ -117,7 +123,7 @@ export default function ReportPage() {
     } finally {
       setIsReportLoading(false)
     }
-  }, [toast, selectedBatchId, selectedSubjectId, selectedLectureType]);
+  }, [toast, selectedBatchId, selectedSubjectId, selectedLectureType, apiPrefix]);
   
   useEffect(() => {
     if (selectedBatchId && selectedSubjectId && selectedLectureType) {
