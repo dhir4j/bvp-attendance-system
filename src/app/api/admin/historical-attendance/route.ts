@@ -1,25 +1,8 @@
-// src/app/api/admin/historical-attendance/route.ts
-'use server';
-import { type NextRequest, NextResponse } from 'next/server';
-import { getFlaskBackend } from '@/lib/utils';
+// This file is no longer needed as the historical-attendance route has been moved to a top-level API.
+// It can be deleted, but for now, I will leave it empty to avoid breaking any other potential links.
+// The new route is at /api/historical-attendance/route.ts
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
-  const cookie = request.headers.get('cookie');
-  const { searchParams } = new URL(request.url);
-
-  // This endpoint can be used by admin, hod, or staff, so we use the admin backend route
-  // The backend will handle scoping based on session if needed, but for now, it's open
-  // as the primary filters (subject_id, batch_id) provide the necessary scoping.
-  const res = await fetch(`${getFlaskBackend()}/admin/historical-attendance?${searchParams.toString()}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(cookie && { cookie }),
-    },
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    return NextResponse.json(data, { status: res.status });
-  }
-  return NextResponse.json(data);
+export async function GET() {
+    return NextResponse.json({ error: 'This endpoint is deprecated. Please use /api/historical-attendance.' }, { status: 404 });
 }

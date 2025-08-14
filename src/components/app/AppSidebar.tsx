@@ -23,7 +23,7 @@ const staffItems = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/dashboard/reports", label: "My Reports", icon: FileBarChart },
     { href: "/dashboard/defaulters", label: "My Defaulters", icon: UserX },
-    { href: "/dashboard/admin/historical-attendance", label: "Historical Attendance", icon: History },
+    { href: "/dashboard/historical-attendance", label: "Historical Attendance", icon: History },
     { href: "/dashboard/credits", label: "Credits", icon: Award },
 ]
 
@@ -35,9 +35,9 @@ const adminItems = [
     { href: "/dashboard/admin/batches", label: "Batches", icon: School2 },
     { href: "/dashboard/admin/assignments", label: "Assignments", icon: LinkIcon },
     { href: "/dashboard/admin/staff-assignments", label: "Staff Assignments", icon: UserCog },
-    { href: "/dashboard/admin/report", label: "Department Reports", icon: FileBarChart },
+    { href: "/dashboard/admin/report", label: "Attendance Report", icon: FileBarChart },
     { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },
-    { href: "/dashboard/admin/historical-attendance", label: "Historical Attendance", icon: History },
+    { href: "/dashboard/historical-attendance", label: "Historical Attendance", icon: History },
 ]
 
 // HOD gets a mix of staff and admin-like features
@@ -47,9 +47,9 @@ const hodItems = [
     { href: "/dashboard/admin/batches", label: "Batches", icon: School2 },
     { href: "/dashboard/admin/staff", label: "Staff", icon: Users },
     { href: "/dashboard/admin/staff-assignments", label: "Staff Assignments", icon: UserCog },
-    { href: "/dashboard/admin/report", label: "Department Report", icon: FileBarChart },
+    { href: "/dashboard/admin/report", label: "Department Attendance", icon: FileBarChart },
     { href: "/dashboard/admin/edit-attendance", label: "Edit Attendance", icon: Pencil },
-    { href: "/dashboard/admin/historical-attendance", label: "Historical Attendance", icon: History },
+    { href: "/dashboard/historical-attendance", label: "Historical Attendance", icon: History },
 ];
 
 
