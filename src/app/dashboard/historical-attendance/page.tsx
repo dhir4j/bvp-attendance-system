@@ -13,7 +13,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CalendarIcon, FileDown, Loader2, Search } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { addDays, format } from 'date-fns';
@@ -132,9 +131,10 @@ export default function HistoricalAttendancePage() {
     if (!batchId) return;
 
     let url = '';
-    // For HOD and Admin, use the same admin route as it's not permissioned
-    if (user?.role === 'admin' || user?.role === 'hod') {
-        url = `/api/admin/subjects-by-batch/${batchId}`;
+    if (user?.role === 'admin') {
+        url = `/api/admin/subjects/by-batch/${batchId}`;
+    } else if (user?.role === 'hod') {
+        url = `/api/hod/subjects/by-batch/${batchId}`;
     } else if (user?.role === 'staff') {
         url = `/api/staff/subjects/by-batch/${batchId}`;
     }
@@ -154,8 +154,7 @@ export default function HistoricalAttendancePage() {
   };
 
   const fetchHistoricalData = useCallback(async () => {
-    if (!selectedSubjectId || !selectedBatchId || !selectedLectureType || !dateRange?.from || !dateRange?.to) {
-        toast({ variant: 'destructive', title: 'Missing Filters', description: "Please select all filters to generate the report."});
+    if (!selectedSubjectId || !selectedBatchId || !dateRange?.from || !dateRange?.to) {
         return;
     }
     setIsDataLoading(true);
@@ -166,8 +165,10 @@ export default function HistoricalAttendancePage() {
             batch_id: selectedBatchId,
             start_date: format(dateRange.from, 'yyyy-MM-dd'),
             end_date: format(dateRange.to, 'yyyy-MM-dd'),
-            lecture_type: selectedLectureType,
         });
+        if (selectedLectureType) {
+            params.append('lecture_type', selectedLectureType);
+        }
        
         const res = await fetch(`/api/historical-attendance?${params.toString()}`);
         const data = await res.json();
@@ -180,13 +181,20 @@ export default function HistoricalAttendancePage() {
         setIsDataLoading(false);
     }
   }, [selectedSubjectId, selectedBatchId, dateRange, selectedLectureType, toast]);
+  
+  const handleGenerateReport = () => {
+      if (!selectedSubjectId || !selectedBatchId || !selectedLectureType) {
+        toast({ variant: 'destructive', title: 'Missing Filters', description: "Please select all filters to generate the report."});
+        return;
+      }
+      fetchHistoricalData();
+  }
 
   const filteredStudents = useMemo(() => {
     if (!historicalData?.students) return [];
 
     let students = historicalData.students;
 
-    // For staff, if lecture type is PR or TU, filter students by sub-batch
     if (user?.role === 'staff' && (selectedLectureType === 'PR' || selectedLectureType === 'TU')) {
       const assignment = staffAssignments?.find(a => String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId);
       if (assignment) {
@@ -260,7 +268,7 @@ export default function HistoricalAttendancePage() {
             <CardDescription>Select filters to generate the report.</CardDescription>
           </div>
           <div className="flex w-full sm:w-auto gap-2">
-            <Button onClick={fetchHistoricalData} disabled={isDataLoading || !selectedBatchId || !selectedSubjectId || !selectedLectureType}>
+            <Button onClick={handleGenerateReport} disabled={isDataLoading || !selectedBatchId || !selectedSubjectId || !selectedLectureType}>
               {isDataLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                Generate Report
             </Button>
@@ -302,7 +310,7 @@ export default function HistoricalAttendancePage() {
           
           <div className="space-y-2">
             <Label>Lecture Type</Label>
-            <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={isInitialLoading || !selectedSubjectId}>
+            <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={!selectedSubjectId}>
               <SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger>
               <SelectContent>
                   {assignedLectureTypes.map(type => (

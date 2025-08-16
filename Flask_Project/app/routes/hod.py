@@ -1,4 +1,5 @@
 
+
 from flask import Blueprint, request, jsonify, session
 from ..models import Staff, Subject, Assignment, Batch, Student, AttendanceRecord, TotalLectures, HOD, Department
 from .. import db, bcrypt
