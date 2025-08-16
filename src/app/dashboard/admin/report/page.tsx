@@ -101,7 +101,7 @@ export default function ReportPage() {
     setSelectedSubjectId("");
     try {
       const res = await fetch(`/api/admin/subjects/by-batch/${batchId}`);
-      if (!res.ok) throw new Error("Failed to fetch subjects for this batch.");
+      if (!res.ok) throw new Error((await res.json()).error || "Failed to fetch subjects for this batch.");
       setSubjects(await res.json());
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });

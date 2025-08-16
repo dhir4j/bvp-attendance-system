@@ -79,9 +79,16 @@ export default function HistoricalAttendancePage() {
         if (!res.ok) throw new Error('Failed to fetch departments');
         setDepartments(await res.json());
       } else if (user?.role === 'hod') {
-        const res = await fetch(`${apiPrefix}/batches`);
-        if (!res.ok) throw new Error('Failed to fetch HOD batches');
-        setBatches(await res.json());
+        const [batchesRes, subjectsRes] = await Promise.all([
+          fetch(`${apiPrefix}/batches`),
+          fetch(`${apiPrefix}/subjects`)
+        ]);
+        if (!batchesRes.ok) throw new Error('Failed to fetch HOD batches');
+        if (!subjectsRes.ok) throw new Error('Failed to fetch HOD subjects');
+        setBatches(await batchesRes.json());
+        const subs: Subject[] = await subjectsRes.json()
+        setSubjects(subs.map(s => ({ id: s.id, name: `${s.subject_name} (${s.subject_code})` })));
+
       } else if (user?.role === 'staff') {
         const res = await fetch(`${apiPrefix}/assignments`);
         if (!res.ok) throw new Error('Failed to fetch staff assignments');
@@ -110,6 +117,7 @@ export default function HistoricalAttendancePage() {
     setSelectedBatchNumber('');
     setBatches([]);
     setSubjects([]);
+    setHistoricalData(null);
     if (!deptCode) return;
     
     setIsDependentLoading(true);
@@ -124,7 +132,7 @@ export default function HistoricalAttendancePage() {
     }
   };
 
-  // Handle batch change for all roles
+  // Handle batch change for all roles except HOD (HOD subjects are pre-loaded)
   const handleBatchChange = async (batchId: string) => {
     setSelectedBatchId(batchId);
     setSelectedSubjectId('');
@@ -135,16 +143,31 @@ export default function HistoricalAttendancePage() {
     if (!batchId) return;
 
     let url = '';
+    // HODs already have subjects loaded, so we only need to fetch for Admin and Staff
     if (user?.role === 'admin') url = `/api/admin/subjects/by-batch/${batchId}`;
-    else if (user?.role === 'hod') url = `/api/hod/subjects-by-batch/${batchId}`;
     else if (user?.role === 'staff') url = `/api/staff/subjects/by-batch/${batchId}`;
+    else if (user?.role === 'hod') {
+        // For HOD, filter pre-loaded subjects that are in this batch
+        const hodSubjectsForBatchUrl = `/api/hod/subjects-by-batch/${batchId}`;
+        setIsDependentLoading(true);
+        try {
+            const res = await fetch(hodSubjectsForBatchUrl);
+            if (!res.ok) throw new Error('Failed to fetch subjects for batch');
+            setSubjects(await res.json());
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Error', description: error.message });
+        } finally {
+            setIsDependentLoading(false);
+        }
+        return; // exit early
+    }
     
     if (!url) return;
 
     setIsDependentLoading(true);
     try {
         const res = await fetch(url);
-        if (!res.ok) throw new Error('Failed to fetch subjects for batch');
+        if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch subjects for batch');
         setSubjects(await res.json());
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: error.message });
@@ -195,6 +218,10 @@ export default function HistoricalAttendancePage() {
     if (!historicalData?.students) return [];
 
     let students = historicalData.students;
+    if (user?.role === 'staff' && selectedLectureType !== 'TH' && selectedBatchNumber) {
+        students = students.filter(s => s.batch_number === parseInt(selectedBatchNumber, 10));
+    }
+
     if (!searchTerm) return students;
     
     const lowercasedFilter = searchTerm.toLowerCase();
@@ -204,30 +231,54 @@ export default function HistoricalAttendancePage() {
         student.roll_no.toLowerCase().includes(lowercasedFilter) ||
         student.enrollment_no.toLowerCase().includes(lowercasedFilter)
     );
-  }, [historicalData, searchTerm]);
+  }, [historicalData, searchTerm, user?.role, selectedLectureType, selectedBatchNumber]);
   
   const assignedLectureTypes = useMemo(() => {
     if (user?.role !== 'staff' || !selectedSubjectId || !selectedBatchId || !staffAssignments) {
         return [{label: 'Theory', value: 'TH'}, {label: 'Practical', value: 'PR'}, {label: 'Tutorial', value: 'TU'}];
     }
-    const assignment = staffAssignments.find(a => String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId);
-    if (!assignment) return [];
+    const relevantAssignments = staffAssignments.filter(a => 
+      String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId
+    );
+    if (!relevantAssignments.length) return [];
     
-    return Object.keys(assignment.lecture_types).map(type => ({
+    const types = new Set<string>();
+    relevantAssignments.forEach(a => {
+        Object.keys(a.lecture_types).forEach(type => types.add(type));
+    });
+
+    return Array.from(types).map(type => ({
       value: type,
       label: type === 'TH' ? 'Theory' : type === 'PR' ? 'Practical' : 'Tutorial'
     }));
   }, [user?.role, staffAssignments, selectedBatchId, selectedSubjectId]);
 
   const subBatchNumbers = useMemo(() => {
-    if (!selectedLectureType || selectedLectureType === 'TH' || !staffAssignments || !selectedBatchId || !selectedSubjectId) {
-      return [];
+    if (!selectedLectureType || selectedLectureType === 'TH') return [];
+    
+    if (user?.role === 'staff' && staffAssignments) {
+         const relevantAssignment = staffAssignments.find(a => 
+            String(a.batch_id) === selectedBatchId && 
+            String(a.subject_id) === selectedSubjectId &&
+            a.lecture_types[selectedLectureType]
+        );
+        return relevantAssignment?.lecture_types[selectedLectureType]?.filter(n => n !== null) as number[] || [];
     }
-    const assignment = staffAssignments.find(a => 
-      String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId
-    );
-    return assignment?.lecture_types[selectedLectureType]?.filter(n => n !== null) as number[] || [];
-  }, [selectedLectureType, staffAssignments, selectedBatchId, selectedSubjectId]);
+    
+    // For Admin/HOD, find all possible batch numbers from all assignments for that class
+    if ((user?.role === 'admin' || user?.role === 'hod') && historicalData?.students) {
+       const numbers = new Set<number>();
+       historicalData.students.forEach(s => {
+           if (s.batch_number) {
+               numbers.add(s.batch_number);
+           }
+       });
+       return Array.from(numbers).sort();
+    }
+
+    return [];
+  }, [selectedLectureType, user?.role, staffAssignments, historicalData, selectedBatchId, selectedSubjectId]);
+
 
   useEffect(() => {
     // For staff, if there's only one sub-batch for the selected type, auto-select it.
@@ -250,7 +301,7 @@ export default function HistoricalAttendancePage() {
         student.roll_no,
         student.enrollment_no,
         `"${student.name.replace(/"/g, '""')}"`,
-        ...headers.map(h => student.attendance[h.id] || '')
+        ...headers.map(h => student.attendance[h.id] || 'A')
       ])
     ];
 
@@ -281,7 +332,7 @@ export default function HistoricalAttendancePage() {
             <CardDescription>Select filters to generate the report.</CardDescription>
           </div>
           <div className="flex w-full sm:w-auto gap-2">
-            <Button onClick={handleGenerateReport} disabled={isDataLoading || !allFiltersSelected}>
+            <Button onClick={handleGenerateReport} disabled={isDataLoading || !selectedBatchId || !selectedSubjectId || !selectedLectureType}>
               {isDataLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                Generate Report
             </Button>
@@ -394,7 +445,7 @@ export default function HistoricalAttendancePage() {
                       <TableCell className="sticky left-68 bg-card w-48">{student.name}</TableCell>
                       {historicalData.headers.map(header => (
                         <TableCell key={header.id} className={`text-center font-mono ${student.attendance[header.id] === 'A' ? 'text-destructive' : 'text-green-600'}`}>
-                          {student.attendance[header.id] || '-'}
+                          {student.attendance[header.id] || 'A'}
                         </TableCell>
                       ))}
                     </TableRow>

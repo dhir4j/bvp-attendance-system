@@ -919,7 +919,7 @@ def update_delete_hod(hod_id):
 
 @admin_bp.route('/historical-attendance', methods=['GET'])
 def get_historical_attendance():
-    # --- 0. Universal access check ---
+    # --- 0. Universal access check (no decorator) ---
     is_admin = session.get('is_admin', False)
     hod_id = session.get('hod_id')
     staff_id = session.get('staff_id')
@@ -990,7 +990,8 @@ def get_historical_attendance():
     lecture_instances = {}
     lecture_sequence = 1
     for lec in total_lectures:
-        key = f"{lec.date.isoformat()}-{lec.assignment_id}"
+        # ** FIX: Make key unique per lecture instance **
+        key = f"{lec.date.isoformat()}-{lec.assignment_id}-{lecture_sequence}"
         if key not in lecture_instances:
             lecture_instances[key] = {
                 'id': lecture_sequence,
@@ -1001,15 +1002,21 @@ def get_historical_attendance():
             
     student_attendance_map = defaultdict(dict)
     for record in all_records:
-        key = f"{record.date.isoformat()}-{record.assignment_id}"
-        if key in lecture_instances:
+        # Need to find the right lecture instance key. This is tricky because one record
+        # could cover multiple lectures on a day. For simplicity, we find the first one.
+        # This part of the logic might need refinement if multiple lectures for the same assignment on the same day need to be distinct columns.
+        # For now, let's find a key that matches date and assignment.
+        matching_keys = [k for k, v in lecture_instances.items() if v['date'] == record.date and v['assignment_id'] == record.assignment_id]
+        if matching_keys:
+            key = matching_keys[0] # Use the first match
             status = 'P' if record.status == 'present' and record.lecture_count > 0 else 'A'
             student_attendance_map[record.student_id][key] = status
+
 
     # --- 6. Build the final response ---
     
     headers = [{
-        'id': f"lec_{details['id']}",
+        'id': key, # Use the unique key for the header ID
         'label': f"Lec no. {details['id']} {details['date'].strftime('%d-%m-%Y')}"
     } for key, details in sorted(lecture_instances.items(), key=lambda item: item[1]['id'])]
     
@@ -1027,9 +1034,11 @@ def get_historical_attendance():
         for key, details in lecture_instances.items():
             assignment = assignment_map.get(details['assignment_id'])
             if assignment:
+                # Student is relevant if it's a theory class OR their sub-batch number matches the assignment's
                 if assignment.lecture_type == 'TH' or assignment.batch_number == student.batch_number:
                     is_student_relevant = True
-                    header_id = f"lec_{details['id']}"
+                    header_id = key # Use the unique key for the header ID
+                    # If there's no record, the student was absent for that lecture instance.
                     status = student_attendance_map[student.id].get(key, 'A')
                     student_data['attendance'][header_id] = status
         

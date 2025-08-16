@@ -8,16 +8,32 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   const cookie = request.headers.get('cookie');
-  const res = await fetch(`${getFlaskBackend()}/admin/subjects-by-batch/${params.id}`, {
+  // This endpoint can be used by admin or hod, so we try both flask routes
+  // The backend will handle the authorization based on session cookie.
+  const adminUrl = `${getFlaskBackend()}/admin/subjects-by-batch/${params.id}`;
+  const hodUrl = `${getFlaskBackend()}/hod/subjects-by-batch/${params.id}`;
+
+  let res = await fetch(adminUrl, {
     headers: {
       'Content-Type': 'application/json',
       ...(cookie && { cookie }),
     },
   });
 
+  // If the admin route fails (e.g., 401 for HOD), try the HOD route.
+  if (!res.ok && (res.status === 401 || res.status === 403)) {
+     res = await fetch(hodUrl, {
+        headers: {
+            'Content-Type': 'application/json',
+            ...(cookie && { cookie }),
+        },
+    });
+  }
+
   const data = await res.json();
   if (!res.ok) {
-    return NextResponse.json(data, { status: res.status });
+    const errorMsg = data.error || `Failed to fetch subjects. Status: ${res.status}`;
+    return NextResponse.json({ error: errorMsg }, { status: res.status });
   }
   return NextResponse.json(data);
 }
