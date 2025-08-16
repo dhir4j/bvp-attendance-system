@@ -1,3 +1,4 @@
+
 // src/app/dashboard/historical-attendance/page.tsx
 "use client"
 
@@ -16,7 +17,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CalendarIcon, FileDown, Loader2, Search } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { addDays, format } from 'date-fns';
-import type { Batch, Subject, Department } from '@/types';
+import type { Batch, Subject, Department, StaffAssignmentsResponse } from '@/types';
 
 interface SubjectIdentifier {
   id: number;
@@ -30,6 +31,7 @@ interface HistoricalData {
     roll_no: string;
     enrollment_no: string;
     name: string;
+    batch_number?: number | null;
     attendance: Record<string, 'P' | 'A'>;
   }[];
 }
@@ -47,7 +49,8 @@ export default function HistoricalAttendancePage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [subjects, setSubjects] = useState<SubjectIdentifier[]>([]);
-
+  const [staffAssignments, setStaffAssignments] = useState<StaffAssignmentsResponse | null>(null);
+  
   // Selected Filter State
   const [selectedDeptCode, setSelectedDeptCode] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState('');
@@ -83,7 +86,8 @@ export default function HistoricalAttendancePage() {
         const res = await fetch(`${apiPrefix}/assignments`);
         if (!res.ok) throw new Error('Failed to fetch staff assignments');
         const assignmentsData: any[] = await res.json();
-        const uniqueBatches = Array.from(new Map(assignmentsData.map(a => [a.batch_id, { id: a.batch_id, dept_name: a.batch_name.split(' ')[0], class_number: a.batch_name.split(' ')[1] }])).values());
+        setStaffAssignments(assignmentsData);
+        const uniqueBatches = Array.from(new Map(assignmentsData.map(a => [a.batch_id, { id: a.batch_id, dept_name: a.batch_name.split(' (')[0] }])).values());
         setBatches(uniqueBatches as Batch[]);
       }
     } catch (error: any) {
@@ -122,10 +126,13 @@ export default function HistoricalAttendancePage() {
   const handleBatchChange = async (batchId: string) => {
     setSelectedBatchId(batchId);
     setSelectedSubjectId('');
+    setSelectedLectureType('');
     setSubjects([]);
+    setHistoricalData(null);
     if (!batchId) return;
 
     let url = '';
+    // For HOD and Admin, use the same admin route as it's not permissioned
     if (user?.role === 'admin' || user?.role === 'hod') {
         url = `/api/admin/subjects-by-batch/${batchId}`;
     } else if (user?.role === 'staff') {
@@ -176,15 +183,42 @@ export default function HistoricalAttendancePage() {
 
   const filteredStudents = useMemo(() => {
     if (!historicalData?.students) return [];
-    if (!searchTerm) return historicalData.students;
+
+    let students = historicalData.students;
+
+    // For staff, if lecture type is PR or TU, filter students by sub-batch
+    if (user?.role === 'staff' && (selectedLectureType === 'PR' || selectedLectureType === 'TU')) {
+      const assignment = staffAssignments?.find(a => String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId);
+      if (assignment) {
+        const subBatchNumber = assignment.lecture_types[selectedLectureType]?.[0];
+        if (subBatchNumber) {
+          students = students.filter(s => s.batch_number === subBatchNumber);
+        }
+      }
+    }
+
+    if (!searchTerm) return students;
     const lowercasedFilter = searchTerm.toLowerCase();
-    return historicalData.students.filter(
+    return students.filter(
       (student) =>
         student.name.toLowerCase().includes(lowercasedFilter) ||
         student.roll_no.toLowerCase().includes(lowercasedFilter) ||
         student.enrollment_no.toLowerCase().includes(lowercasedFilter)
     );
-  }, [historicalData, searchTerm]);
+  }, [historicalData, searchTerm, user?.role, selectedLectureType, staffAssignments, selectedBatchId, selectedSubjectId]);
+  
+  const assignedLectureTypes = useMemo(() => {
+    if (user?.role !== 'staff' || !selectedSubjectId || !selectedBatchId || !staffAssignments) {
+        return [{label: 'Theory', value: 'TH'}, {label: 'Practical', value: 'PR'}, {label: 'Tutorial', value: 'TU'}];
+    }
+    const assignment = staffAssignments.find(a => String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId);
+    if (!assignment) return [];
+    
+    return Object.keys(assignment.lecture_types).map(type => ({
+      value: type,
+      label: type === 'TH' ? 'Theory' : type === 'PR' ? 'Practical' : 'Tutorial'
+    }));
+  }, [user?.role, staffAssignments, selectedBatchId, selectedSubjectId]);
 
   const handleExportCSV = () => {
     if (!historicalData || filteredStudents.length === 0) {
@@ -254,7 +288,7 @@ export default function HistoricalAttendancePage() {
             <Label>Batch</Label>
             <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isInitialLoading || (user?.role === 'admin' && !selectedDeptCode)}>
               <SelectTrigger><SelectValue placeholder="Select Batch" /></SelectTrigger>
-              <SelectContent>{batches.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.dept_name} {b.class_number}</SelectItem>)}</SelectContent>
+              <SelectContent>{batches.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.dept_name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           
@@ -268,12 +302,12 @@ export default function HistoricalAttendancePage() {
           
           <div className="space-y-2">
             <Label>Lecture Type</Label>
-            <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={isInitialLoading}>
+            <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={isInitialLoading || !selectedSubjectId}>
               <SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger>
               <SelectContent>
-                  <SelectItem value="TH">Theory</SelectItem>
-                  <SelectItem value="PR">Practical</SelectItem>
-                  <SelectItem value="TU">Tutorial</SelectItem>
+                  {assignedLectureTypes.map(type => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
