@@ -990,26 +990,28 @@ def get_historical_attendance():
     lecture_instances = {}
     lecture_sequence = 1
     for lec in total_lectures:
+      for i in range(lec.lecture_count):
         # ** FIX: Make key unique per lecture instance **
-        key = f"{lec.date.isoformat()}-{lec.assignment_id}-{lecture_sequence}"
-        if key not in lecture_instances:
-            lecture_instances[key] = {
-                'id': lecture_sequence,
-                'date': lec.date,
-                'assignment_id': lec.assignment_id
-            }
-            lecture_sequence += 1
+        # Using date, assignment_id, and an index for multi-hour lectures
+        key = f"{lec.date.isoformat()}-{lec.assignment_id}-{i}"
+        lecture_instances[key] = {
+            'id': lecture_sequence,
+            'date': lec.date,
+            'assignment_id': lec.assignment_id
+        }
+        lecture_sequence += 1
             
     student_attendance_map = defaultdict(dict)
     for record in all_records:
-        # Need to find the right lecture instance key. This is tricky because one record
-        # could cover multiple lectures on a day. For simplicity, we find the first one.
-        # This part of the logic might need refinement if multiple lectures for the same assignment on the same day need to be distinct columns.
-        # For now, let's find a key that matches date and assignment.
-        matching_keys = [k for k, v in lecture_instances.items() if v['date'] == record.date and v['assignment_id'] == record.assignment_id]
-        if matching_keys:
-            key = matching_keys[0] # Use the first match
-            status = 'P' if record.status == 'present' and record.lecture_count > 0 else 'A'
+        # Find the keys for all lectures this record's assignment had on this day
+        matching_keys = [
+            k for k, v in lecture_instances.items() 
+            if v['date'] == record.date and v['assignment_id'] == record.assignment_id
+        ]
+        
+        # Mark as 'P' for the number of lectures attended, 'A' for the rest
+        for i, key in enumerate(matching_keys):
+            status = 'P' if i < record.lecture_count else 'A'
             student_attendance_map[record.student_id][key] = status
 
 
@@ -1018,7 +1020,7 @@ def get_historical_attendance():
     headers = [{
         'id': key, # Use the unique key for the header ID
         'label': f"Lec no. {details['id']} {details['date'].strftime('%d-%m-%Y')}"
-    } for key, details in sorted(lecture_instances.items(), key=lambda item: item[1]['id'])]
+    } for key, details in sorted(lecture_instances.items(), key=lambda item: (item[1]['date'], item[1]['id']))]
     
     student_rows = []
     for student in students:
@@ -1027,20 +1029,24 @@ def get_historical_attendance():
             'roll_no': student.roll_no,
             'enrollment_no': student.enrollment_no,
             'name': student.name,
+            'batch_number': student.batch_number,
             'attendance': {}
         }
         
         is_student_relevant = False
+        # Iterate through all lecture instances to build the row
         for key, details in lecture_instances.items():
             assignment = assignment_map.get(details['assignment_id'])
-            if assignment:
-                # Student is relevant if it's a theory class OR their sub-batch number matches the assignment's
-                if assignment.lecture_type == 'TH' or assignment.batch_number == student.batch_number:
-                    is_student_relevant = True
-                    header_id = key # Use the unique key for the header ID
-                    # If there's no record, the student was absent for that lecture instance.
-                    status = student_attendance_map[student.id].get(key, 'A')
-                    student_data['attendance'][header_id] = status
+            if not assignment:
+                continue
+
+            # Student is relevant if it's a theory class OR their sub-batch number matches the assignment's
+            if assignment.lecture_type == 'TH' or (assignment.batch_number and assignment.batch_number == student.batch_number):
+                is_student_relevant = True
+                header_id = key # Use the unique key for the header ID
+                # If there's no record, the student was absent for that lecture instance.
+                status = student_attendance_map[student.id].get(key, 'A')
+                student_data['attendance'][header_id] = status
         
         if is_student_relevant:
             student_rows.append(student_data)

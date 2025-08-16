@@ -73,12 +73,12 @@ export default function ReportPage() {
         if (!batchesRes.ok) throw new Error("Failed to fetch batches");
         setBatches(await batchesRes.json());
         
-        // HODs need subjects loaded initially. Admins will load on batch selection.
+        // HODs need subjects loaded initially. Admins load on batch selection.
         if (user.role === 'hod') {
             const subjectsRes = await fetch(`${apiPrefix}/subjects`);
             if (!subjectsRes.ok) throw new Error("Subject fetch failed");
             const subjectsData: Subject[] = await subjectsRes.json();
-            setSubjects(subjectsData.map((s) => ({ ...s, name: `${s.subject_name} (${s.subject_code})` })));
+            setSubjects(subjectsData.map((s) => ({ id: s.id, name: `${s.subject_name} (${s.subject_code})` })));
         }
     } catch (error: any) {
         toast({ variant: "destructive", title: "Error", description: error.message });

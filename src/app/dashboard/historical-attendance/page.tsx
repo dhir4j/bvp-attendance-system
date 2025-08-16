@@ -92,9 +92,9 @@ export default function HistoricalAttendancePage() {
       } else if (user?.role === 'staff') {
         const res = await fetch(`${apiPrefix}/assignments`);
         if (!res.ok) throw new Error('Failed to fetch staff assignments');
-        const assignmentsData: any[] = await res.json();
+        const assignmentsData: StaffAssignmentsResponse = await res.json();
         setStaffAssignments(assignmentsData);
-        const uniqueBatches = Array.from(new Map(assignmentsData.map(a => [a.batch_id, { id: a.batch_id, dept_name: a.batch_name.split(' (')[0] }])).values());
+        const uniqueBatches = Array.from(new Map(assignmentsData.map(a => [a.batch_id, { id: a.batch_id, dept_name: a.batch_name.split(' (')[0], class_number: a.batch_name.split(' ')[1] }])).values());
         setBatches(uniqueBatches as Batch[]);
       }
     } catch (error: any) {
@@ -132,7 +132,7 @@ export default function HistoricalAttendancePage() {
     }
   };
 
-  // Handle batch change for all roles except HOD (HOD subjects are pre-loaded)
+  // Handle batch change for all roles
   const handleBatchChange = async (batchId: string) => {
     setSelectedBatchId(batchId);
     setSelectedSubjectId('');
@@ -143,24 +143,9 @@ export default function HistoricalAttendancePage() {
     if (!batchId) return;
 
     let url = '';
-    // HODs already have subjects loaded, so we only need to fetch for Admin and Staff
     if (user?.role === 'admin') url = `/api/admin/subjects/by-batch/${batchId}`;
+    else if (user?.role === 'hod') url = `/api/hod/subjects/by-batch/${batchId}`;
     else if (user?.role === 'staff') url = `/api/staff/subjects/by-batch/${batchId}`;
-    else if (user?.role === 'hod') {
-        // For HOD, filter pre-loaded subjects that are in this batch
-        const hodSubjectsForBatchUrl = `/api/hod/subjects-by-batch/${batchId}`;
-        setIsDependentLoading(true);
-        try {
-            const res = await fetch(hodSubjectsForBatchUrl);
-            if (!res.ok) throw new Error('Failed to fetch subjects for batch');
-            setSubjects(await res.json());
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Error', description: error.message });
-        } finally {
-            setIsDependentLoading(false);
-        }
-        return; // exit early
-    }
     
     if (!url) return;
 
@@ -180,6 +165,11 @@ export default function HistoricalAttendancePage() {
     if (!selectedSubjectId || !selectedBatchId || !selectedLectureType || !dateRange?.from || !dateRange?.to) {
         return;
     }
+     // For non-theory lectures, a sub-batch must be selected
+    if (selectedLectureType !== 'TH' && !selectedBatchNumber) {
+        return;
+    }
+
     setIsDataLoading(true);
     setHistoricalData(null);
     try {
@@ -211,6 +201,11 @@ export default function HistoricalAttendancePage() {
         toast({ variant: 'destructive', title: 'Missing Filters', description: "Please select all required filters to generate the report."});
         return;
       }
+      // For practicals/tutorials, check if a sub-batch is selected
+      if (selectedLectureType !== 'TH' && !selectedBatchNumber) {
+        toast({ variant: 'destructive', title: 'Missing Sub-Batch', description: "Please select a sub-batch for practicals or tutorials." });
+        return;
+      }
       fetchHistoricalData();
   }
 
@@ -218,7 +213,8 @@ export default function HistoricalAttendancePage() {
     if (!historicalData?.students) return [];
 
     let students = historicalData.students;
-    if (user?.role === 'staff' && selectedLectureType !== 'TH' && selectedBatchNumber) {
+    // For non-theory lectures, filter students by the selected sub-batch on the frontend as well
+    if (selectedLectureType !== 'TH' && selectedBatchNumber) {
         students = students.filter(s => s.batch_number === parseInt(selectedBatchNumber, 10));
     }
 
@@ -231,7 +227,7 @@ export default function HistoricalAttendancePage() {
         student.roll_no.toLowerCase().includes(lowercasedFilter) ||
         student.enrollment_no.toLowerCase().includes(lowercasedFilter)
     );
-  }, [historicalData, searchTerm, user?.role, selectedLectureType, selectedBatchNumber]);
+  }, [historicalData, searchTerm, selectedLectureType, selectedBatchNumber]);
   
   const assignedLectureTypes = useMemo(() => {
     if (user?.role !== 'staff' || !selectedSubjectId || !selectedBatchId || !staffAssignments) {
@@ -254,7 +250,7 @@ export default function HistoricalAttendancePage() {
   }, [user?.role, staffAssignments, selectedBatchId, selectedSubjectId]);
 
   const subBatchNumbers = useMemo(() => {
-    if (!selectedLectureType || selectedLectureType === 'TH') return [];
+    if (!selectedLectureType || selectedLectureType === 'TH' || !historicalData?.students) return [];
     
     if (user?.role === 'staff' && staffAssignments) {
          const relevantAssignment = staffAssignments.find(a => 
@@ -265,15 +261,15 @@ export default function HistoricalAttendancePage() {
         return relevantAssignment?.lecture_types[selectedLectureType]?.filter(n => n !== null) as number[] || [];
     }
     
-    // For Admin/HOD, find all possible batch numbers from all assignments for that class
-    if ((user?.role === 'admin' || user?.role === 'hod') && historicalData?.students) {
+    // For Admin/HOD, find all possible batch numbers from all students in the currently loaded batch context
+    if ((user?.role === 'admin' || user?.role === 'hod')) {
        const numbers = new Set<number>();
        historicalData.students.forEach(s => {
            if (s.batch_number) {
                numbers.add(s.batch_number);
            }
        });
-       return Array.from(numbers).sort();
+       return Array.from(numbers).sort((a,b) => a - b);
     }
 
     return [];
@@ -316,7 +312,6 @@ export default function HistoricalAttendancePage() {
   };
 
   const showBatchNumberFilter = selectedLectureType && selectedLectureType !== 'TH';
-  const allFiltersSelected = selectedBatchId && selectedSubjectId && selectedLectureType && (!showBatchNumberFilter || selectedBatchNumber);
 
   return (
     <div className="flex flex-col gap-6">
@@ -360,7 +355,7 @@ export default function HistoricalAttendancePage() {
             <Label>Batch</Label>
             <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isInitialLoading || (user?.role === 'admin' && !selectedDeptCode)}>
               <SelectTrigger><SelectValue placeholder="Select Batch" /></SelectTrigger>
-              <SelectContent>{batches.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.dept_name}</SelectItem>)}</SelectContent>
+              <SelectContent>{batches.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.dept_name}{b.class_number ? ` ${b.class_number}` : ''}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           

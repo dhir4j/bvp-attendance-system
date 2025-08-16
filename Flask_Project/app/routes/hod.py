@@ -258,7 +258,7 @@ def get_staff_assignments_report():
         staff_assignments[staff.id]['assignments'].append({
             'id': assignment.id,
             'subject_name': f"{subject.subject_name} ({subject.subject_code})",
-            'batch_name': f"{batch.dept_name} {batch.class_number} ({batch.academic_year} Sem {batch.semester})",
+            'batch_name': f"{batch.dept_name} {batch.class_number} ({batch.academic_year} Sem {semester})",
             'lecture_type': assignment.lecture_type,
             'batch_number': assignment.batch_number
         })
