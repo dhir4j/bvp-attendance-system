@@ -13,10 +13,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CalendarIcon, FileDown, History, Loader2, Search } from 'lucide-react';
+import { CalendarIcon, FileDown, Loader2, Search } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { addDays, format } from 'date-fns';
-import type { Batch, Subject } from '@/types';
+import type { Batch, Subject, Department } from '@/types';
 
 interface SubjectIdentifier {
   id: number;
@@ -37,14 +37,19 @@ interface HistoricalData {
 export default function HistoricalAttendancePage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(true);
+  
+  // Loading states
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isDependentLoading, setIsDependentLoading] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(false);
 
-  // Filter Data
+  // Filter Data Source
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [subjects, setSubjects] = useState<SubjectIdentifier[]>([]);
 
-  // Filter State
+  // Selected Filter State
+  const [selectedDeptCode, setSelectedDeptCode] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState('');
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [selectedLectureType, setSelectedLectureType] = useState('');
@@ -61,81 +66,93 @@ export default function HistoricalAttendancePage() {
     return '';
   }, [user?.role]);
 
+  // Fetch initial data based on user role
   const fetchInitialData = useCallback(async () => {
     if (!apiPrefix) return;
-    setIsLoading(true);
+    setIsInitialLoading(true);
     try {
-      // Admins and HODs fetch all their batches and subjects upfront.
-      if (user?.role === 'admin' || user?.role === 'hod') {
-        const [batchesRes, subjectsRes] = await Promise.all([
-          fetch(`${apiPrefix}/batches`),
-          fetch(`${apiPrefix}/subjects`)
-        ]);
-
-        if (!batchesRes.ok) throw new Error('Failed to fetch batches');
-        setBatches(await batchesRes.json());
-        
-        if (!subjectsRes.ok) throw new Error('Failed to fetch subjects');
-        const subs = await subjectsRes.json()
-        setSubjects(subs.map((s: Subject) => ({id: s.id, name: `${s.subject_name} (${s.subject_code})` })));
+      if (user?.role === 'admin') {
+        const res = await fetch(`${apiPrefix}/departments`);
+        if (!res.ok) throw new Error('Failed to fetch departments');
+        setDepartments(await res.json());
+      } else if (user?.role === 'hod') {
+        const res = await fetch(`${apiPrefix}/batches`);
+        if (!res.ok) throw new Error('Failed to fetch HOD batches');
+        setBatches(await res.json());
       } else if (user?.role === 'staff') {
-        // Staff fetch their assigned batches, subjects are fetched on batch selection.
-        const assignmentsRes = await fetch('/api/staff/assignments');
-        if (!assignmentsRes.ok) throw new Error('Failed to fetch assignments');
-        const assignmentsData: any[] = await assignmentsRes.json();
-        
+        const res = await fetch(`${apiPrefix}/assignments`);
+        if (!res.ok) throw new Error('Failed to fetch staff assignments');
+        const assignmentsData: any[] = await res.json();
         const uniqueBatches = Array.from(new Map(assignmentsData.map(a => [a.batch_id, { id: a.batch_id, dept_name: a.batch_name.split(' ')[0], class_number: a.batch_name.split(' ')[1] }])).values());
         setBatches(uniqueBatches as Batch[]);
       }
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error loading filters', description: error.message });
     } finally {
-      setIsLoading(false);
+      setIsInitialLoading(false);
     }
   }, [user, toast, apiPrefix]);
 
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
-  
-  const handleBatchChange = useCallback(async (batchId: string) => {
+
+  // Handle department change for Admin
+  const handleDeptChange = async (deptCode: string) => {
+    setSelectedDeptCode(deptCode);
+    setSelectedBatchId('');
+    setSelectedSubjectId('');
+    setBatches([]);
+    setSubjects([]);
+    if (!deptCode) return;
+    
+    setIsDependentLoading(true);
+    try {
+        const res = await fetch(`/api/admin/batches-by-department/${deptCode}`);
+        if (!res.ok) throw new Error('Failed to fetch batches for department');
+        setBatches(await res.json());
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: error.message });
+    } finally {
+        setIsDependentLoading(false);
+    }
+  };
+
+  // Handle batch change for all roles
+  const handleBatchChange = async (batchId: string) => {
     setSelectedBatchId(batchId);
     setSelectedSubjectId('');
     setSubjects([]);
     if (!batchId) return;
 
-    if (user?.role === 'staff') {
-        setIsLoading(true);
-        try {
-            const res = await fetch(`/api/staff/subjects/by-batch/${batchId}`);
-            if (!res.ok) throw new Error('Failed to fetch subjects for batch');
-            setSubjects(await res.json());
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Error', description: error.message });
-        } finally {
-            setIsLoading(false);
-        }
-    } else if (user?.role === 'admin') {
-      setIsLoading(true);
-        try {
-            const res = await fetch(`/api/admin/subjects-by-batch/${batchId}`);
-            if (!res.ok) throw new Error('Failed to fetch subjects for batch');
-            setSubjects(await res.json());
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Error', description: error.message });
-        } finally {
-            setIsLoading(false);
-        }
+    let url = '';
+    if (user?.role === 'admin' || user?.role === 'hod') {
+        url = `/api/admin/subjects-by-batch/${batchId}`;
+    } else if (user?.role === 'staff') {
+        url = `/api/staff/subjects/by-batch/${batchId}`;
     }
-  }, [user, toast]);
 
+    if (!url) return;
+
+    setIsDependentLoading(true);
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to fetch subjects for batch');
+        setSubjects(await res.json());
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: error.message });
+    } finally {
+        setIsDependentLoading(false);
+    }
+  };
 
   const fetchHistoricalData = useCallback(async () => {
     if (!selectedSubjectId || !selectedBatchId || !selectedLectureType || !dateRange?.from || !dateRange?.to) {
-        setHistoricalData(null);
+        toast({ variant: 'destructive', title: 'Missing Filters', description: "Please select all filters to generate the report."});
         return;
     }
     setIsDataLoading(true);
+    setHistoricalData(null);
     try {
         const params = new URLSearchParams({
             subject_id: selectedSubjectId,
@@ -145,7 +162,6 @@ export default function HistoricalAttendancePage() {
             lecture_type: selectedLectureType,
         });
        
-        // Unified API route for historical data
         const res = await fetch(`/api/historical-attendance?${params.toString()}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to fetch historical data');
@@ -181,7 +197,7 @@ export default function HistoricalAttendancePage() {
       ...filteredStudents.map(student => [
         student.roll_no,
         student.enrollment_no,
-        `"${student.name}"`,
+        `"${student.name.replace(/"/g, '""')}"`,
         ...headers.map(h => student.attendance[h.id] || '')
       ])
     ];
@@ -195,7 +211,6 @@ export default function HistoricalAttendancePage() {
     link.click();
     document.body.removeChild(link);
   };
-
 
   return (
     <div className="flex flex-col gap-6">
@@ -224,23 +239,36 @@ export default function HistoricalAttendancePage() {
       <CardContent>
         {/* Filters */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6 p-4 border rounded-lg">
+          
+          {user?.role === 'admin' && (
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select onValueChange={handleDeptChange} value={selectedDeptCode} disabled={isInitialLoading}>
+                <SelectTrigger><SelectValue placeholder="Select Department" /></SelectTrigger>
+                <SelectContent>{departments.map(d => <SelectItem key={d.dept_code} value={d.dept_code}>{d.dept_name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>Batch</Label>
-            <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isLoading}>
+            <Select onValueChange={handleBatchChange} value={selectedBatchId} disabled={isInitialLoading || (user?.role === 'admin' && !selectedDeptCode)}>
               <SelectTrigger><SelectValue placeholder="Select Batch" /></SelectTrigger>
               <SelectContent>{batches.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.dept_name} {b.class_number}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+          
           <div className="space-y-2">
             <Label>Subject</Label>
-            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={isLoading || !selectedBatchId}>
+            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={isDependentLoading || !selectedBatchId}>
               <SelectTrigger><SelectValue placeholder="Select Subject" /></SelectTrigger>
               <SelectContent>{subjects.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+          
           <div className="space-y-2">
             <Label>Lecture Type</Label>
-            <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={isLoading}>
+            <Select onValueChange={setSelectedLectureType} value={selectedLectureType} disabled={isInitialLoading}>
               <SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger>
               <SelectContent>
                   <SelectItem value="TH">Theory</SelectItem>
@@ -249,6 +277,7 @@ export default function HistoricalAttendancePage() {
               </SelectContent>
             </Select>
           </div>
+          
           <div className="space-y-2">
             <Label>Date Range</Label>
             <Popover>

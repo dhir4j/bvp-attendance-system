@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
   // This endpoint can be used by admin, hod, or staff.
   // The backend will handle scoping based on session roles.
   // We use the '/admin/historical-attendance' Flask route as the single source of truth.
+  // The logic inside that Flask route is what determines the correct data scoping.
   const res = await fetch(`${getFlaskBackend()}/admin/historical-attendance?${searchParams.toString()}`, {
     headers: {
       'Content-Type': 'application/json',

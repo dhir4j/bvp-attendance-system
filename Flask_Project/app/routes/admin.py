@@ -918,8 +918,15 @@ def update_delete_hod(hod_id):
 
 
 @admin_bp.route('/historical-attendance', methods=['GET'])
-@admin_required
 def get_historical_attendance():
+    # --- 0. Universal access check ---
+    is_admin = session.get('is_admin', False)
+    hod_id = session.get('hod_id')
+    staff_id = session.get('staff_id')
+    
+    if not is_admin and not hod_id and not staff_id:
+        return jsonify({'error': 'Login required'}), 401
+    
     # --- 1. Get and validate required parameters ---
     subject_id = request.args.get('subject_id', type=int)
     batch_id = request.args.get('batch_id', type=int)
@@ -939,12 +946,22 @@ def get_historical_attendance():
     except ValueError:
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
 
-    # --- 3. Base Queries ---
+    # --- 3. Base Queries and Role-based Scoping ---
     batch = Batch.query.get_or_404(batch_id)
     students = sorted(batch.students, key=lambda s: s.roll_no)
     
     # Base query for assignments for this subject/batch
     assignment_query = Assignment.query.filter_by(subject_id=subject_id, batch_id=batch_id)
+    
+    # Apply role-based filtering
+    if is_admin:
+        pass # Admin can see everything
+    elif hod_id:
+        hod_dept_code = session.get('department_code')
+        assignment_query = assignment_query.join(Subject).filter(Subject.dept_code == hod_dept_code)
+    elif staff_id:
+        assignment_query = assignment_query.filter(Assignment.staff_id == staff_id)
+    
     if lecture_type:
         assignment_query = assignment_query.filter_by(lecture_type=lecture_type)
     
@@ -1024,3 +1041,23 @@ def get_historical_attendance():
         'students': student_rows
     })
 
+@admin_bp.route('/batches-by-department/<string:dept_code>', methods=['GET'])
+@admin_required
+def get_batches_by_department(dept_code):
+    """
+    Returns a list of batches for a specific department.
+    """
+    department = Department.query.get(dept_code)
+    if not department:
+        return jsonify({'error': 'Department not found'}), 404
+        
+    batches = Batch.query.filter_by(dept_name=department.dept_name).all()
+    result = [{
+        'id': b.id,
+        'dept_name': b.dept_name,
+        'class_number': b.class_number,
+        'academic_year': b.academic_year,
+        'semester': b.semester,
+        'student_count': len(b.students)
+    } for b in batches]
+    return jsonify(result)
