@@ -1,4 +1,3 @@
-
 // src/app/dashboard/historical-attendance/page.tsx
 "use client"
 
@@ -17,6 +16,7 @@ import { CalendarIcon, FileDown, Loader2, Search } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { addDays, format } from 'date-fns';
 import type { Batch, Subject, Department, StaffAssignmentsResponse } from '@/types';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 interface SubjectIdentifier {
   id: number;
@@ -55,6 +55,7 @@ export default function HistoricalAttendancePage() {
   const [selectedBatchId, setSelectedBatchId] = useState('');
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [selectedLectureType, setSelectedLectureType] = useState('');
+  const [selectedBatchNumber, setSelectedBatchNumber] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: addDays(new Date(), -30), to: new Date() });
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -105,6 +106,8 @@ export default function HistoricalAttendancePage() {
     setSelectedDeptCode(deptCode);
     setSelectedBatchId('');
     setSelectedSubjectId('');
+    setSelectedLectureType('');
+    setSelectedBatchNumber('');
     setBatches([]);
     setSubjects([]);
     if (!deptCode) return;
@@ -126,19 +129,16 @@ export default function HistoricalAttendancePage() {
     setSelectedBatchId(batchId);
     setSelectedSubjectId('');
     setSelectedLectureType('');
+    setSelectedBatchNumber('');
     setSubjects([]);
     setHistoricalData(null);
     if (!batchId) return;
 
     let url = '';
-    if (user?.role === 'admin') {
-        url = `/api/admin/subjects/by-batch/${batchId}`;
-    } else if (user?.role === 'hod') {
-        url = `/api/hod/subjects/by-batch/${batchId}`;
-    } else if (user?.role === 'staff') {
-        url = `/api/staff/subjects/by-batch/${batchId}`;
-    }
-
+    if (user?.role === 'admin') url = `/api/admin/subjects/by-batch/${batchId}`;
+    else if (user?.role === 'hod') url = `/api/hod/subjects-by-batch/${batchId}`;
+    else if (user?.role === 'staff') url = `/api/staff/subjects/by-batch/${batchId}`;
+    
     if (!url) return;
 
     setIsDependentLoading(true);
@@ -154,7 +154,7 @@ export default function HistoricalAttendancePage() {
   };
 
   const fetchHistoricalData = useCallback(async () => {
-    if (!selectedSubjectId || !selectedBatchId || !dateRange?.from || !dateRange?.to) {
+    if (!selectedSubjectId || !selectedBatchId || !selectedLectureType || !dateRange?.from || !dateRange?.to) {
         return;
     }
     setIsDataLoading(true);
@@ -165,9 +165,10 @@ export default function HistoricalAttendancePage() {
             batch_id: selectedBatchId,
             start_date: format(dateRange.from, 'yyyy-MM-dd'),
             end_date: format(dateRange.to, 'yyyy-MM-dd'),
+            lecture_type: selectedLectureType,
         });
-        if (selectedLectureType) {
-            params.append('lecture_type', selectedLectureType);
+        if (selectedBatchNumber) {
+            params.append('batch_number', selectedBatchNumber);
         }
        
         const res = await fetch(`/api/historical-attendance?${params.toString()}`);
@@ -180,11 +181,11 @@ export default function HistoricalAttendancePage() {
     } finally {
         setIsDataLoading(false);
     }
-  }, [selectedSubjectId, selectedBatchId, dateRange, selectedLectureType, toast]);
+  }, [selectedSubjectId, selectedBatchId, dateRange, selectedLectureType, selectedBatchNumber, toast]);
   
   const handleGenerateReport = () => {
       if (!selectedSubjectId || !selectedBatchId || !selectedLectureType) {
-        toast({ variant: 'destructive', title: 'Missing Filters', description: "Please select all filters to generate the report."});
+        toast({ variant: 'destructive', title: 'Missing Filters', description: "Please select all required filters to generate the report."});
         return;
       }
       fetchHistoricalData();
@@ -194,18 +195,8 @@ export default function HistoricalAttendancePage() {
     if (!historicalData?.students) return [];
 
     let students = historicalData.students;
-
-    if (user?.role === 'staff' && (selectedLectureType === 'PR' || selectedLectureType === 'TU')) {
-      const assignment = staffAssignments?.find(a => String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId);
-      if (assignment) {
-        const subBatchNumber = assignment.lecture_types[selectedLectureType]?.[0];
-        if (subBatchNumber) {
-          students = students.filter(s => s.batch_number === subBatchNumber);
-        }
-      }
-    }
-
     if (!searchTerm) return students;
+    
     const lowercasedFilter = searchTerm.toLowerCase();
     return students.filter(
       (student) =>
@@ -213,7 +204,7 @@ export default function HistoricalAttendancePage() {
         student.roll_no.toLowerCase().includes(lowercasedFilter) ||
         student.enrollment_no.toLowerCase().includes(lowercasedFilter)
     );
-  }, [historicalData, searchTerm, user?.role, selectedLectureType, staffAssignments, selectedBatchId, selectedSubjectId]);
+  }, [historicalData, searchTerm]);
   
   const assignedLectureTypes = useMemo(() => {
     if (user?.role !== 'staff' || !selectedSubjectId || !selectedBatchId || !staffAssignments) {
@@ -227,6 +218,25 @@ export default function HistoricalAttendancePage() {
       label: type === 'TH' ? 'Theory' : type === 'PR' ? 'Practical' : 'Tutorial'
     }));
   }, [user?.role, staffAssignments, selectedBatchId, selectedSubjectId]);
+
+  const subBatchNumbers = useMemo(() => {
+    if (!selectedLectureType || selectedLectureType === 'TH' || !staffAssignments || !selectedBatchId || !selectedSubjectId) {
+      return [];
+    }
+    const assignment = staffAssignments.find(a => 
+      String(a.batch_id) === selectedBatchId && String(a.subject_id) === selectedSubjectId
+    );
+    return assignment?.lecture_types[selectedLectureType]?.filter(n => n !== null) as number[] || [];
+  }, [selectedLectureType, staffAssignments, selectedBatchId, selectedSubjectId]);
+
+  useEffect(() => {
+    // For staff, if there's only one sub-batch for the selected type, auto-select it.
+    if (user?.role === 'staff' && subBatchNumbers.length === 1) {
+      setSelectedBatchNumber(String(subBatchNumbers[0]));
+    } else {
+      setSelectedBatchNumber('');
+    }
+  }, [user?.role, subBatchNumbers]);
 
   const handleExportCSV = () => {
     if (!historicalData || filteredStudents.length === 0) {
@@ -254,6 +264,9 @@ export default function HistoricalAttendancePage() {
     document.body.removeChild(link);
   };
 
+  const showBatchNumberFilter = selectedLectureType && selectedLectureType !== 'TH';
+  const allFiltersSelected = selectedBatchId && selectedSubjectId && selectedLectureType && (!showBatchNumberFilter || selectedBatchNumber);
+
   return (
     <div className="flex flex-col gap-6">
        <div>
@@ -268,7 +281,7 @@ export default function HistoricalAttendancePage() {
             <CardDescription>Select filters to generate the report.</CardDescription>
           </div>
           <div className="flex w-full sm:w-auto gap-2">
-            <Button onClick={handleGenerateReport} disabled={isDataLoading || !selectedBatchId || !selectedSubjectId || !selectedLectureType}>
+            <Button onClick={handleGenerateReport} disabled={isDataLoading || !allFiltersSelected}>
               {isDataLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                Generate Report
             </Button>
@@ -280,7 +293,7 @@ export default function HistoricalAttendancePage() {
       </CardHeader>
       <CardContent>
         {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6 p-4 border rounded-lg">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6 p-4 border rounded-lg">
           
           {user?.role === 'admin' && (
             <div className="space-y-2">
@@ -319,6 +332,20 @@ export default function HistoricalAttendancePage() {
               </SelectContent>
             </Select>
           </div>
+
+          {showBatchNumberFilter && (
+            <div className="space-y-2">
+              <Label>Sub-Batch</Label>
+              <Select onValueChange={setSelectedBatchNumber} value={selectedBatchNumber} disabled={!selectedLectureType || (user?.role==='staff' && subBatchNumbers.length === 1)}>
+                <SelectTrigger><SelectValue placeholder="Select Sub-Batch" /></SelectTrigger>
+                <SelectContent>
+                    {subBatchNumbers.map(num => (
+                        <SelectItem key={num} value={String(num)}>Batch {num}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           
           <div className="space-y-2">
             <Label>Date Range</Label>
@@ -334,6 +361,7 @@ export default function HistoricalAttendancePage() {
               </PopoverContent>
             </Popover>
           </div>
+
            <div className="space-y-2 self-end">
              <Input placeholder="Search students..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8" />
              <Search className="absolute h-4 w-4 text-muted-foreground mt-[-26px] ml-2" />
@@ -341,43 +369,46 @@ export default function HistoricalAttendancePage() {
         </div>
 
         {/* Table */}
-        <div className="relative overflow-x-auto border rounded-lg">
-          {isDataLoading && (
-            <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          )}
-          {historicalData && filteredStudents.length > 0 ? (
-            <Table className="min-w-full">
-              <TableHeader className="sticky top-0 bg-card z-10">
-                <TableRow>
-                  <TableHead className="sticky left-0 bg-card z-20 w-28">Roll No</TableHead>
-                  <TableHead className="sticky left-28 bg-card z-20 w-40">Enrollment No</TableHead>
-                  <TableHead className="sticky left-68 bg-card z-20 w-48">Name</TableHead>
-                  {historicalData.headers.map(header => <TableHead key={header.id} className="text-center whitespace-nowrap">{header.label}</TableHead>)}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredStudents.map(student => (
-                  <TableRow key={student.id}>
-                    <TableCell className="sticky left-0 bg-card font-medium w-28">{student.roll_no}</TableCell>
-                    <TableCell className="sticky left-28 bg-card w-40">{student.enrollment_no}</TableCell>
-                    <TableCell className="sticky left-68 bg-card w-48">{student.name}</TableCell>
-                    {historicalData.headers.map(header => (
-                      <TableCell key={header.id} className={`text-center font-mono ${student.attendance[header.id] === 'A' ? 'text-destructive' : 'text-green-600'}`}>
-                        {student.attendance[header.id] || '-'}
-                      </TableCell>
-                    ))}
+        <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+          <div className="relative">
+            {isDataLoading && (
+              <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            )}
+            {historicalData && filteredStudents.length > 0 ? (
+              <Table className="min-w-full">
+                <TableHeader className="sticky top-0 bg-card z-10">
+                  <TableRow>
+                    <TableHead className="sticky left-0 bg-card z-20 w-28">Roll No</TableHead>
+                    <TableHead className="sticky left-28 bg-card z-20 w-40">Enrollment No</TableHead>
+                    <TableHead className="sticky left-68 bg-card z-20 w-48">Name</TableHead>
+                    {historicalData.headers.map(header => <TableHead key={header.id} className="text-center whitespace-nowrap">{header.label}</TableHead>)}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center p-8 text-muted-foreground">
-                {isDataLoading ? 'Loading data...' : 'Please select all filters and click "Generate Report" to view data.'}
-            </div>
-          )}
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredStudents.map(student => (
+                    <TableRow key={student.id}>
+                      <TableCell className="sticky left-0 bg-card font-medium w-28">{student.roll_no}</TableCell>
+                      <TableCell className="sticky left-28 bg-card w-40">{student.enrollment_no}</TableCell>
+                      <TableCell className="sticky left-68 bg-card w-48">{student.name}</TableCell>
+                      {historicalData.headers.map(header => (
+                        <TableCell key={header.id} className={`text-center font-mono ${student.attendance[header.id] === 'A' ? 'text-destructive' : 'text-green-600'}`}>
+                          {student.attendance[header.id] || '-'}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center p-8 text-muted-foreground">
+                  {isDataLoading ? 'Loading data...' : 'Please select all filters and click "Generate Report" to view data.'}
+              </div>
+            )}
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
       </CardContent>
     </Card>
     </div>

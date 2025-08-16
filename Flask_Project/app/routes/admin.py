@@ -938,6 +938,7 @@ def get_historical_attendance():
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     lecture_type = request.args.get('lecture_type') # e.g., 'TH', 'PR', 'TU'
+    batch_number = request.args.get('batch_number', type=int) # For PR/TU sub-batch filtering
 
     # Default to last 30 days if no dates are provided
     try:
@@ -954,9 +955,7 @@ def get_historical_attendance():
     assignment_query = Assignment.query.filter_by(subject_id=subject_id, batch_id=batch_id)
     
     # Apply role-based filtering
-    if is_admin:
-        pass # Admin can see everything
-    elif hod_id:
+    if hod_id:
         hod_dept_code = session.get('department_code')
         assignment_query = assignment_query.join(Subject).filter(Subject.dept_code == hod_dept_code)
     elif staff_id:
@@ -964,12 +963,16 @@ def get_historical_attendance():
     
     if lecture_type:
         assignment_query = assignment_query.filter_by(lecture_type=lecture_type)
+
+    if batch_number:
+        assignment_query = assignment_query.filter_by(batch_number=batch_number)
     
     assignments = assignment_query.all()
     if not assignments:
         return jsonify({'error': 'No assignments found for the given criteria.'}), 404
     
     assignment_ids = [a.id for a in assignments]
+    assignment_map = {a.id: a for a in assignments} # For quick lookup
 
     # --- 4. Get all relevant attendance records and total lectures in one go ---
     all_records = AttendanceRecord.query.filter(
@@ -984,7 +987,6 @@ def get_historical_attendance():
     
     # --- 5. Process data into the desired spreadsheet-like format ---
     
-    # Create a map of lecture instances { 'YYYY-MM-DD-AssignmentID': sequence_number }
     lecture_instances = {}
     lecture_sequence = 1
     for lec in total_lectures:
@@ -997,24 +999,20 @@ def get_historical_attendance():
             }
             lecture_sequence += 1
             
-    # Create a map for quick lookup: { student_id: { lecture_instance_key: status } }
     student_attendance_map = defaultdict(dict)
     for record in all_records:
         key = f"{record.date.isoformat()}-{record.assignment_id}"
         if key in lecture_instances:
-            # The status is simply 'P' or 'A'
             status = 'P' if record.status == 'present' and record.lecture_count > 0 else 'A'
             student_attendance_map[record.student_id][key] = status
 
     # --- 6. Build the final response ---
     
-    # Prepare the dynamic headers
     headers = [{
         'id': f"lec_{details['id']}",
         'label': f"Lec no. {details['id']} {details['date'].strftime('%d-%m-%Y')}"
     } for key, details in sorted(lecture_instances.items(), key=lambda item: item[1]['id'])]
     
-    # Prepare the student rows
     student_rows = []
     for student in students:
         student_data = {
@@ -1025,16 +1023,18 @@ def get_historical_attendance():
             'attendance': {}
         }
         
+        is_student_relevant = False
         for key, details in lecture_instances.items():
-            # Check if this lecture applies to the student (for PR/TU)
-            assignment = next((a for a in assignments if a.id == details['assignment_id']), None)
-            if assignment and (assignment.lecture_type == 'TH' or assignment.batch_number == student.batch_number):
-                header_id = f"lec_{details['id']}"
-                # Get status from map, default to 'A' if no record exists for an applicable lecture
-                status = student_attendance_map[student.id].get(key, 'A')
-                student_data['attendance'][header_id] = status
-            
-        student_rows.append(student_data)
+            assignment = assignment_map.get(details['assignment_id'])
+            if assignment:
+                if assignment.lecture_type == 'TH' or assignment.batch_number == student.batch_number:
+                    is_student_relevant = True
+                    header_id = f"lec_{details['id']}"
+                    status = student_attendance_map[student.id].get(key, 'A')
+                    student_data['attendance'][header_id] = status
+        
+        if is_student_relevant:
+            student_rows.append(student_data)
 
     return jsonify({
         'headers': headers,
